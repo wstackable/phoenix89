@@ -1457,6 +1457,7 @@ function getCustomSprite(name) {
         "slime_glob": [SLIME_GLOB_MAP, SLIME_GLOB_COLORS],
         "dragon": [DRAGON_MAP, DRAGON_COLORS],
         "player_phoenix": [GOLD_PHOENIX_MAP, GOLD_PHOENIX_COLORS],
+        "bullet_red_pulse": [RED_LASER_PULSE_MAP, RED_LASER_PULSE_COLORS],
     };
 
     if (name in spriteDefs) {
@@ -1486,11 +1487,29 @@ const GOLD_PHOENIX_COLORS = [
     [255, 250, 180],   // 3: white-hot glow — energy core
 ];
 
+// ─── Red Laser Pulse Sprite (Caleb's weapon) ────────────────
+// Small sharp red laser bolt — tapered point, pure red
+const RED_LASER_PULSE_MAP = [
+    ".1.",
+    "12.",
+    "12.",
+    "12.",
+    "12.",
+    "12.",
+    ".1.",
+];
+
+const RED_LASER_PULSE_COLORS = [
+    [220, 0, 0],      // 1: pure red
+    [255, 60, 60],    // 2: bright red highlight
+];
+
 // Set of sprite names that are custom multi-color (bypass theme coloring)
 const CUSTOM_SPRITE_NAMES = new Set([
     "player_purple_devil", "player_purple_devil_open",
     "player_double_blastery", "player_red_bomber",
     "player_phoenix",
+    "bullet_red_pulse",
     "drone", "swarm_drone", "slime_glob", "dragon",
 ]);
 

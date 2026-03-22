@@ -181,8 +181,8 @@ class WeaponSystem {
             // Double Blastery: 3 fan lasers
             this._fireBlasteryFan(player);
         } else if (w === WEAPON_RED_CHARGE) {
-            // Red Bomber: red laser beam
-            this._fireChargeLaser(player);
+            // Red Bomber: 3 red laser pulses in fan spread (same as Brady's)
+            this._fireRedFan(player);
         }
 
         // Homing missiles: fire alongside any weapon if addon purchased
@@ -278,22 +278,12 @@ class WeaponSystem {
         this.blasteryRocketCooldown = 15;
     }
 
-    _fireChargeLaser(player) {
+    _fireRedFan(player) {
+        // Same damage (2) and angle spread as Brady's _fireBlasteryFan, red laser pulses
         const [gx, gy] = player.weaponGunPos();
-        // Static beam - consistent width and damage every shot
-        const beamW = 2;
-        const beamDmg = 6;
-
-        const b = new Bullet(gx - Math.floor(beamW / 2), 0, 0, 0, beamDmg, "bullet_standard", 7);
-        b.width = beamW;
-        b.height = Math.floor(gy);
-        b.x = gx - Math.floor(beamW / 2);
-        b.y = 0;
-        this.playerBullets.push(b);
-
-        this.chargeBeam = {
-            x: gx, y: gy, w: beamW, life: 6, playerRef: player,
-        };
+        this._addBullet(gx - 1, gy - 5, 0, -5, 2, "bullet_red_pulse", 10, 2, 8);
+        this._addBullet(gx - 1, gy - 5, -1.5, -4.5, 2, "bullet_red_pulse", 10, 2, 8);
+        this._addBullet(gx - 1, gy - 5, 1.5, -4.5, 2, "bullet_red_pulse", 10, 2, 8);
     }
 
     _addBullet(x, y, vx, vy, damage, sprite, bulletType = 0, width = 3, height = 5) {
@@ -666,8 +656,11 @@ class WeaponSystem {
         for (let b of this.playerBullets) {
             if (b.alive && ![5, 7].includes(b.bulletType)) {
                 if (b.bulletType === 6) {
-                    // Blastery fan lasers
+                    // Blastery fan lasers (Brady — green/yellow)
                     this._drawBlasteryLaser(ctx, b, scale);
+                } else if (b.bulletType === 10) {
+                    // Red laser pulses (Caleb)
+                    this._drawRedLaserPulse(ctx, b, scale);
                 } else if (b.bulletType === 9) {
                     // Star bullets
                     this._drawStarBullet(ctx, b, scale);
@@ -760,6 +753,28 @@ class WeaponSystem {
         // Bright center (white-yellow)
         ctx.globalAlpha = 1;
         ctx.fillStyle = "rgb(255, 255, 200)";
+        ctx.fillRect(bx, by, w, h);
+    }
+
+    _drawRedLaserPulse(ctx, b, scale) {
+        const bx = Math.floor(b.x * scale);
+        const by = Math.floor(b.y * scale);
+        const h = Math.floor(b.height * scale);
+        const w = Math.max(scale, Math.floor(b.width * scale));
+
+        // Outer glow (dark red)
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = "rgb(255, 0, 0)";
+        ctx.fillRect(bx - scale, by, w + scale * 2, h);
+
+        // Inner body (bright red)
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = "rgb(230, 20, 20)";
+        ctx.fillRect(bx - Math.floor(scale / 2), by, w + scale, h);
+
+        // Sharp bright center (pure red)
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "rgb(255, 50, 50)";
         ctx.fillRect(bx, by, w, h);
     }
 
