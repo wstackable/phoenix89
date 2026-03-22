@@ -23,16 +23,25 @@ class SoundManager {
      * Initialize AudioContext on first user interaction (browser policy)
      */
     ensureAudioContext() {
-        if (this.audioContext) return;
+        if (!this.audioContext) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext();
+            this.musicGain = this.audioContext.createGain();
+            this.musicGain.gain.value = 0.4;
+            this.musicGain.connect(this.audioContext.destination);
 
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        this.audioContext = new AudioContext();
-        this.musicGain = this.audioContext.createGain();
-        this.musicGain.gain.value = 0.4;
-        this.musicGain.connect(this.audioContext.destination);
+            this.initialized = true;
+            this._generateSoundEffects();
+        }
 
-        this.initialized = true;
-        this._generateSoundEffects();
+        // Retry any music that was blocked by autoplay policy
+        // (must run even if audioContext already existed, since the
+        // Audio element's .play() needs a direct user gesture)
+        if (this._pendingMusicType) {
+            const type = this._pendingMusicType;
+            this._pendingMusicType = null;
+            this._playMusicTrack(type);
+        }
     }
 
     /**
@@ -375,7 +384,11 @@ class SoundManager {
                     }
                 };
             }
-            this.musicAudio.play().catch(() => {}); // ignore autoplay block
+            this.musicAudio.play().catch(() => {
+                // Autoplay blocked — store pending music so it can be
+                // retried on next user interaction
+                this._pendingMusicType = type;
+            });
         } catch(e) {
             // Music not available, that's OK
         }

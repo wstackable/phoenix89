@@ -533,14 +533,10 @@ class Game {
             event.preventDefault();
         }
 
-        // Initialize audio on first interaction — if this is the first keypress,
-        // start menu music now (browser blocks autoplay before user interaction)
-        if (!this.sound.initialized) {
-            this.sound.ensureAudioContext();
-            if (this.state === STATE_TITLE) {
-                this.sound.startMenuMusic();
-            }
-        }
+        // Initialize audio on first interaction (browser blocks autoplay
+        // before user gesture). ensureAudioContext also retries any music
+        // that was blocked by autoplay policy.
+        this.sound.ensureAudioContext();
 
         // Global keys: R cycles radio, M toggles music, C cycles themes
         // (disabled during feedback text input and high score entry)

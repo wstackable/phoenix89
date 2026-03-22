@@ -403,7 +403,7 @@ class TitleScreen {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.54";
+        const subtitle = "Claude Edition 1.55";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
