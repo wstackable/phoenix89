@@ -21,8 +21,9 @@ const CHANGELOG = [
             "High scores switched from CSV to TSV for fresher data",
             "Changelog footer shows scroll instructions",
             "High scores backend switched to Firebase Realtime Database",
-            "Scorecard redesigned with cohesive color palette and glow effects",
-            "Post-game flow now shows global leaderboard after name entry",
+            "Scorecard and high scores restyled to match main menu theme",
+            "High scores always shows global Firebase leaderboard",
+            "Secret Hangar: pick ship first, then choose difficulty",
         ]
     },
     {

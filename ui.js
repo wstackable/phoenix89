@@ -1099,6 +1099,7 @@ class HighScoreScreen {
         this.difficulty = difficulty || DIFF_BEGINNER;
         this.nameInput = "";
         this.blinkTimer = 0;
+        this.fetchGlobalScores();
     }
 
     show() {
@@ -1142,65 +1143,48 @@ class HighScoreScreen {
     draw(ctx) {
         this.blinkTimer = (this.blinkTimer + 1) % 40;
 
-        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        const fg = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        const bg = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+
+        ctx.fillStyle = bg;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        // Border (matches main menu)
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
 
-        if (this.enteringName) {
-            // Name entry mode: show local scores
-            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
-            const title = "HIGH SCORES";
-            const titleMetrics = ctx.measureText(title);
-            ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
+        ctx.fillStyle = fg;
 
-            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            let y = 18 * SCALE;
-            for (let i = 0; i < this.scores.length; i++) {
-                const [name, score] = this.scores[i];
-                const highlight = i === this.newRank;
+        // Title
+        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+        const title = "HIGH SCORES";
+        const titleW = ctx.measureText(title).width;
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 12 * SCALE);
 
-                if (highlight) {
-                    const nameDisplay = this.nameInput || "___";
-                    const line = ` ${(i + 1).toString().padStart(3, ' ')} ${nameDisplay.padEnd(12, ' ')} ${this.newScore.toString().padStart(8, ' ')}`;
-                    ctx.fillText(line, SCREEN_WIDTH / 4, y);
-                } else {
-                    const line = ` ${(i + 1).toString().padStart(3, ' ')} ${name}  ${score.toString().padStart(8, ' ')}`;
-                    ctx.fillText(line, SCREEN_WIDTH / 4, y);
-                }
+        // Always show global leaderboard
+        ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+        let y = 24 * SCALE;
 
-                y += 8 * SCALE;
-            }
+        if (this.loadingGlobal && this.globalScores.length === 0) {
+            const loadText = "Loading scores...";
+            const lw = ctx.measureText(loadText).width;
+            ctx.fillText(loadText, SCREEN_WIDTH / 2 - lw / 2, y);
+        } else if (this.globalScores.length === 0) {
+            const emptyText = "No scores yet. Be the first!";
+            const ew = ctx.measureText(emptyText).width;
+            ctx.fillText(emptyText, SCREEN_WIDTH / 2 - ew / 2, y);
         } else {
-            // Viewing mode: show global leaderboard
-            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
-            const title = "GLOBAL HIGH SCORES";
-            const titleMetrics = ctx.measureText(title);
-            ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
-
-            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            let y = 18 * SCALE;
-
-            if (this.loadingGlobal && this.globalScores.length === 0) {
-                const loadText = "Loading scores...";
-                const lw = ctx.measureText(loadText).width;
-                ctx.fillText(loadText, SCREEN_WIDTH / 2 - lw / 2, y);
-            } else if (this.globalScores.length === 0) {
-                const emptyText = "No scores yet. Be the first!";
-                const ew = ctx.measureText(emptyText).width;
-                ctx.fillText(emptyText, SCREEN_WIDTH / 2 - ew / 2, y);
-            } else {
-                for (let i = 0; i < this.globalScores.length; i++) {
-                    const [name, score, diff] = this.globalScores[i];
-                    const line = ` ${(i + 1).toString().padStart(2, ' ')}  ${name.padEnd(12, ' ')} ${score.toString().padStart(8, ' ')}  ${diff}`;
-                    ctx.fillText(line, 6 * SCALE, y);
-                    y += 6 * SCALE;
-                }
+            for (let i = 0; i < this.globalScores.length; i++) {
+                const [name, score, diff] = this.globalScores[i];
+                const line = ` ${(i + 1).toString().padStart(2, ' ')}  ${name.padEnd(12, ' ')} ${score.toString().padStart(8, ' ')}  ${diff}`;
+                ctx.fillText(line, 6 * SCALE, y);
+                y += 6 * SCALE;
             }
         }
 
         if (this.enteringName) {
-            // Text input area
+            // Name entry area at bottom
             const entryY = SCREEN_HEIGHT - 22 * SCALE;
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
             const label = "Enter your name:";
@@ -1212,20 +1196,27 @@ class HighScoreScreen {
             const boxH = 6 * SCALE;
             const boxX = SCREEN_WIDTH / 2 - boxW / 2;
             const boxY = entryY + 3 * SCALE;
-            ctx.strokeStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.strokeStyle = fg;
             ctx.lineWidth = 1;
             ctx.strokeRect(boxX, boxY, boxW, boxH);
 
             // Name text with blinking cursor
+            ctx.fillStyle = fg;
             ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
             const cursor = this.blinkTimer < 25 ? "_" : " ";
             const display = this.nameInput + cursor;
             ctx.fillText(display, boxX + 2 * SCALE, boxY + Math.floor(4.5 * SCALE));
 
-            ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
             const prompt = "Type your name, then press ENTER";
             const pw = ctx.measureText(prompt).width;
-            ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 5 * SCALE);
+            ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
+        } else {
+            // Viewing prompt
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            const prompt = "Press ENTER to continue";
+            const pw = ctx.measureText(prompt).width;
+            ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         }
     }
 }
@@ -1624,32 +1615,27 @@ class ScoreScreen {
     }
 
     draw(ctx) {
-        // --- Color palette ---
-        const colBg      = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
-        const colTitle   = '#FFFFFF';
-        const colLabel   = 'rgba(225, 235, 220, 0.9)';   // warm off-white for labels
-        const colValue   = 'rgba(130, 255, 200, 1)';     // mint-green accent for values
-        const colDim     = 'rgba(180, 195, 170, 0.7)';   // muted for secondary info
-        const colTotal   = '#FFFFFF';
-        const colDivider = 'rgba(130, 255, 200, 0.3)';
+        const fg = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        const bg = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
 
-        ctx.fillStyle = colBg;
+        ctx.fillStyle = bg;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        // --- Title ---
-        ctx.save();
-        ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
-        ctx.fillStyle = colTitle;
-        ctx.shadowColor = 'rgba(130, 255, 200, 0.6)';
-        ctx.shadowBlur = 12;
+        // Border (matches main menu)
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
+
+        ctx.fillStyle = fg;
+
+        // Title
+        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
         const title = "GAME OVER";
         const titleW = ctx.measureText(title).width;
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 8 * SCALE);
-        ctx.restore();
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 12 * SCALE);
 
         if (this.scoreData.cheated) {
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            ctx.fillStyle = colValue;
             const cheatText = "CHEATER - Score: 0";
             const cheatW = ctx.measureText(cheatText).width;
             ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatW / 2, 40 * SCALE);
@@ -1657,61 +1643,54 @@ class ScoreScreen {
             const d = this.scoreData;
             const fontSize = Math.floor(14 * SCALE / 4);
             ctx.font = `${fontSize}px monospace`;
-            let y = 22 * SCALE;
+            const leftMargin = 12 * SCALE;
+            let y = 26 * SCALE;
             const lineH = 7 * SCALE;
 
-            // --- Enemies Destroyed ---
-            ctx.fillStyle = colLabel;
-            ctx.fillText(`Enemies Destroyed:`, SCREEN_WIDTH / 4, y);
+            // Enemies Destroyed
+            ctx.fillText(`Enemies Destroyed:`, leftMargin, y);
             y += lineH;
-            ctx.fillStyle = colValue;
-            const killVal = `${d.killCount} (${d.killScore} pts)`;
-            const killW = ctx.measureText(killVal).width;
-            ctx.fillText(killVal, SCREEN_WIDTH / 2 - killW / 2, y);
-            y += lineH + 2 * SCALE;
-
-            // --- Cash Bonus ---
-            ctx.fillStyle = colLabel;
-            ctx.fillText(`Cash Bonus:`, SCREEN_WIDTH / 4, y);
-            y += lineH;
-            ctx.fillStyle = colValue;
-            const cashStr = `$${(d.cashBonus * 10).toLocaleString()} remaining = ${d.cashBonus} pts`;
-            const cashW = ctx.measureText(cashStr).width;
-            ctx.fillText(cashStr, SCREEN_WIDTH / 2 - cashW / 2, y);
-            y += lineH + 4 * SCALE;
-
-            // --- Divider ---
-            ctx.fillStyle = colDivider;
-            ctx.fillRect(SCREEN_WIDTH / 4, y - 2 * SCALE, SCREEN_WIDTH / 2, 2);
-            y += 3 * SCALE;
-
-            // --- Subtotal ---
-            ctx.fillStyle = colDim;
-            ctx.fillText(`Subtotal: ${d.subtotal}`, SCREEN_WIDTH / 4, y);
-            y += lineH;
-
-            // --- Difficulty multiplier ---
-            ctx.fillText(`${d.diffName} Multiplier: x${d.multiplier}`, SCREEN_WIDTH / 4, y);
+            const killVal = `  ${d.killCount} (${d.killScore} pts)`;
+            ctx.fillText(killVal, leftMargin, y);
             y += lineH + 3 * SCALE;
 
-            // --- Total (prominent, with glow) ---
-            ctx.save();
-            ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
-            ctx.fillStyle = colTotal;
-            ctx.shadowColor = 'rgba(130, 255, 200, 0.7)';
-            ctx.shadowBlur = 16;
+            // Cash Bonus
+            ctx.fillText(`Cash Bonus:`, leftMargin, y);
+            y += lineH;
+            const cashStr = `  $${(d.cashBonus * 10).toLocaleString()} remaining = ${d.cashBonus} pts`;
+            ctx.fillText(cashStr, leftMargin, y);
+            y += lineH + 5 * SCALE;
+
+            // Divider
+            ctx.strokeStyle = fg;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(8 * SCALE, y);
+            ctx.lineTo(SCREEN_WIDTH - 8 * SCALE, y);
+            ctx.stroke();
+            y += 5 * SCALE;
+
+            // Subtotal
+            ctx.fillText(`Subtotal: ${d.subtotal}`, leftMargin, y);
+            y += lineH;
+
+            // Difficulty multiplier
+            ctx.fillText(`${d.diffName} Multiplier: x${d.multiplier}`, leftMargin, y);
+            y += lineH + 5 * SCALE;
+
+            // Total (bigger, centered)
+            ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
             const totalStr = `TOTAL: ${d.total.toLocaleString()}`;
             const totalW = ctx.measureText(totalStr).width;
             ctx.fillText(totalStr, SCREEN_WIDTH / 2 - totalW / 2, y);
-            ctx.restore();
         }
 
-        // --- Prompt ---
-        ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
-        ctx.fillStyle = colDim;
+        // Prompt
+        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = fg;
         const prompt = "Press ENTER to continue";
         const promptW = ctx.measureText(prompt).width;
-        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptW / 2, SCREEN_HEIGHT - 8 * SCALE);
+        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptW / 2, SCREEN_HEIGHT - 6 * SCALE);
     }
 }
 
@@ -1771,26 +1750,40 @@ class SecretHangar {
         this.active = true;
         this.selected = 0;
         this.animCounter = 0;
+        this.phase = 0;  // 0 = ship select, 1 = difficulty select
+        this.difficulty = DIFF_BEGINNER;
     }
 
     handleEvent(event) {
         if (event.type !== 'keydown') return null;
 
-        if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
-            this.selected = (this.selected - 1 + this.ships.length) % this.ships.length;
-        } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
-            this.selected = (this.selected + 1) % this.ships.length;
-        } else if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
-            const idx = this._diffList.indexOf(this.difficulty);
-            this.difficulty = this._diffList[(idx - 1 + this._diffList.length) % this._diffList.length];
-        } else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
-            const idx = this._diffList.indexOf(this.difficulty);
-            this.difficulty = this._diffList[(idx + 1) % this._diffList.length];
-        } else if (event.key === 'Enter' || event.key === ' ') {
-            return this.ships[this.selected];
-        } else if (event.key === 'Escape') {
-            this.active = false;
-            return "back";
+        if (this.phase === 0) {
+            // Phase 0: Ship selection
+            if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
+                this.selected = (this.selected - 1 + this.ships.length) % this.ships.length;
+            } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
+                this.selected = (this.selected + 1) % this.ships.length;
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                this.phase = 1;  // Move to difficulty selection
+            } else if (event.key === 'Escape') {
+                this.active = false;
+                return "back";
+            }
+        } else {
+            // Phase 1: Difficulty selection
+            if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A'
+                || event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
+                const idx = this._diffList.indexOf(this.difficulty);
+                this.difficulty = this._diffList[(idx - 1 + this._diffList.length) % this._diffList.length];
+            } else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D'
+                || event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
+                const idx = this._diffList.indexOf(this.difficulty);
+                this.difficulty = this._diffList[(idx + 1) % this._diffList.length];
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                return this.ships[this.selected];  // Launch!
+            } else if (event.key === 'Escape') {
+                this.phase = 0;  // Go back to ship selection
+            }
         }
         return null;
     }
@@ -1910,25 +1903,81 @@ class SecretHangar {
             y += lineH;
         }
 
-        // Difficulty selector
-        const diffY = SCREEN_HEIGHT - 12 * SCALE;
-        ctx.fillStyle = `rgb(180, 160, 220)`;
-        ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
-        const diffLabel = `\u25C0  ${this._diffNames[this.difficulty]}  \u25B6`;
-        const diffMetrics = ctx.measureText(diffLabel);
-        ctx.fillText(diffLabel, SCREEN_WIDTH / 2 - diffMetrics.width / 2, diffY);
+        if (this.phase === 0) {
+            // Phase 0: Ship select footer
+            ctx.fillStyle = `rgb(120, 100, 160)`;
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            const footer = "ENTER: Select Ship    ESC: Back";
+            const footerMetrics = ctx.measureText(footer);
+            ctx.fillText(footer, SCREEN_WIDTH / 2 - footerMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
+        } else {
+            // Phase 1: Difficulty selection overlay
+            const ship = this.ships[this.selected];
 
-        ctx.fillStyle = `rgb(100, 85, 140)`;
-        ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
-        const diffHint = "\u2190 \u2192 to change difficulty";
-        const diffHintM = ctx.measureText(diffHint);
-        ctx.fillText(diffHint, SCREEN_WIDTH / 2 - diffHintM.width / 2, diffY + Math.floor(4 * SCALE));
+            // Dim the background slightly
+            ctx.fillStyle = `rgba(5, 2, 15, 0.7)`;
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        // Footer
-        ctx.fillStyle = `rgb(120, 100, 160)`;
-        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const footer = "ENTER: Launch    ESC: Back";
-        const footerMetrics = ctx.measureText(footer);
-        ctx.fillText(footer, SCREEN_WIDTH / 2 - footerMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
+            // Show selected ship name
+            ctx.fillStyle = `rgb(${ship.color3[0]}, ${ship.color3[1]}, ${ship.color3[2]})`;
+            ctx.font = `bold ${Math.floor(16 * SCALE / 4)}px monospace`;
+            const shipLabel = `${ship.name}`;
+            const shipLabelW = ctx.measureText(shipLabel).width;
+            ctx.fillText(shipLabel, SCREEN_WIDTH / 2 - shipLabelW / 2, 20 * SCALE);
+
+            // Draw the selected ship sprite centered
+            const spriteNames = {
+                [SHIP_PURPLE_DEVIL]: "player_purple_devil",
+                [SHIP_DOUBLE_BLASTERY]: "player_double_blastery",
+                [SHIP_RED_BOMBER]: "player_red_bomber",
+            };
+            const spriteName = spriteNames[ship.shipType];
+            if (spriteName && typeof spriteManager !== 'undefined') {
+                try {
+                    const spriteCanvas = spriteManager.get(spriteName);
+                    if (spriteCanvas) {
+                        const bob = Math.sin(this.animCounter * 0.08) * 3;
+                        ctx.drawImage(spriteCanvas, SCREEN_WIDTH / 2 - spriteCanvas.width / 2, 28 * SCALE + bob);
+                    }
+                } catch(e) {}
+            }
+
+            // "SELECT DIFFICULTY" label
+            ctx.fillStyle = `rgb(${Math.floor(200 + 55 * pulse)}, ${Math.floor(150 + 60 * pulse)}, 255)`;
+            ctx.font = `bold ${Math.floor(16 * SCALE / 4)}px monospace`;
+            const diffTitle = "SELECT DIFFICULTY";
+            const diffTitleW = ctx.measureText(diffTitle).width;
+            ctx.fillText(diffTitle, SCREEN_WIDTH / 2 - diffTitleW / 2, 55 * SCALE);
+
+            // Difficulty options listed vertically
+            const diffStartY = 68 * SCALE;
+            const diffLineH = 7 * SCALE;
+            for (let i = 0; i < this._diffList.length; i++) {
+                const diff = this._diffList[i];
+                const isSel = (diff === this.difficulty);
+
+                if (isSel) {
+                    ctx.fillStyle = `rgba(${ship.color1[0]}, ${ship.color1[1]}, ${ship.color1[2]}, 0.3)`;
+                    ctx.fillRect(SCREEN_WIDTH / 4, diffStartY + i * diffLineH - SCALE, SCREEN_WIDTH / 2, diffLineH);
+
+                    ctx.fillStyle = `rgb(${ship.color3[0]}, ${ship.color3[1]}, ${ship.color3[2]})`;
+                    ctx.font = `bold ${Math.floor(14 * SCALE / 4)}px monospace`;
+                } else {
+                    ctx.fillStyle = `rgb(140, 120, 180)`;
+                    ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+                }
+
+                const name = this._diffNames[diff];
+                const nameW = ctx.measureText(name).width;
+                ctx.fillText(name, SCREEN_WIDTH / 2 - nameW / 2, diffStartY + i * diffLineH);
+            }
+
+            // Footer
+            ctx.fillStyle = `rgb(120, 100, 160)`;
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            const footer = "ENTER: Launch    ESC: Back";
+            const footerMetrics = ctx.measureText(footer);
+            ctx.fillText(footer, SCREEN_WIDTH / 2 - footerMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
+        }
     }
 }
