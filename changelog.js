@@ -6,6 +6,23 @@
 
 const CHANGELOG = [
     {
+        version: "1.58",
+        date: "Mar 2026",
+        changes: [
+            "Victory screen with fireworks and pulsing VICTORY text",
+            "Scrolling credits with ship sprites and secret hangar reveal",
+            "Epic Chiptune end credits music plays through victory and high scores",
+            "Caleb's weapon changed to red laser fan (bulletType 10)",
+            "Fixed red bullets appearing yellow (new draw function)",
+            "Fixed cash pickup boundary (y>119 → y>ORIG_HEIGHT+5)",
+            "Shop status text larger and split to two lines",
+            "Secret Hangar now has difficulty selector (left/right)",
+            "Special weapon tip shown when launching Brady/Caleb ships",
+            "High scores switched from CSV to TSV for fresher data",
+            "Changelog footer shows scroll instructions",
+        ]
+    },
+    {
         version: "1.57",
         date: "Mar 2026",
         changes: [

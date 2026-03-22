@@ -1469,6 +1469,17 @@ function getCustomSprite(name) {
     return null;
 }
 
+// Returns raw sprite definitions (pixelMap + colors) for custom sprites
+function getCustomSpriteDefs() {
+    return {
+        "player_purple_devil": [PURPLE_DEVIL_MAP, PURPLE_DEVIL_COLORS],
+        "player_purple_devil_open": [PURPLE_DEVIL_OPEN_MAP, PURPLE_DEVIL_OPEN_COLORS],
+        "player_double_blastery": [DOUBLE_BLASTERY_MAP, DOUBLE_BLASTERY_COLORS],
+        "player_red_bomber": [RED_BOMBER_MAP, RED_BOMBER_COLORS],
+        "player_phoenix": [GOLD_PHOENIX_MAP, GOLD_PHOENIX_COLORS],
+    };
+}
+
 // ─── Gold Phoenix Sprite ──────────────────────────────────────
 // Radiating gold look — amber edges, gold body, white-hot energy core
 const GOLD_PHOENIX_MAP = [

@@ -96,8 +96,8 @@ class EnemyBullet {
             }
         }
 
-        // Kill if off screen
-        if (this.y > 119 || this.y < -10 || this.x < -10 || this.x > 170) {
+        // Kill if off screen (use ORIG_HEIGHT for expanded 160x140 play area)
+        if (this.y > ORIG_HEIGHT + 5 || this.y < -10 || this.x < -10 || this.x > 170) {
             this.alive = false;
         }
     }

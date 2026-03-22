@@ -17,6 +17,7 @@ const STATE_DEATH_ANIM = "death_anim";
 const STATE_SECRET_HANGAR = "secret_hangar";
 const STATE_CHANGELOG = "changelog";
 const STATE_LOADING = "loading";
+const STATE_VICTORY = "victory";
 
 // ─── Star Field Background ─────────────────────────────────
 
@@ -465,6 +466,7 @@ class Game {
         this.changeLogScreen = new ChangeLogScreen();
         this.feedbackScreen = new FeedbackScreen();
         this.secretHangar = new SecretHangar();
+        this.victoryScreen = new VictoryScreen();
 
         // Background systems
         this.starField = new StarField();
@@ -500,6 +502,10 @@ class Game {
 
         this.finalScore = 0;
         this.radioPopupTimer = 0;
+
+        // Gameplay tip overlay (fades after a few seconds)
+        this._tipLines = [];
+        this._tipTimer = 0;
 
         // Setup event listeners
         window.addEventListener('keydown', (e) => this._onKeyDown(e));
@@ -705,6 +711,13 @@ class Game {
                 this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
                 this.state = STATE_SCORE;
             }
+        } else if (this.state === STATE_VICTORY) {
+            const done = this.victoryScreen.handleEvent(event);
+            if (done) {
+                // Victory screen finished — music keeps playing through score/high scores
+                this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
+                this.state = STATE_SCORE;
+            }
         }
     }
 
@@ -819,6 +832,10 @@ class Game {
             this.player.cheated = true;  // mark as cheated for level skip
         }
 
+        // Clear any previous tip overlay
+        this._tipLines = [];
+        this._tipTimer = 0;
+
         // Switch from menu music to gameplay music
         this.sound.startMusic(true);
 
@@ -853,7 +870,7 @@ class Game {
         this.weaponSystem.soundCallback = (name) => this.sound.play(name);
         this.enemyMgr = new EnemyManager();
 
-        const diff = this.titleScreen.difficulty;
+        const diff = this.secretHangar.difficulty;
         this.levelMgr = new LevelManager(diff);
         this.enemyMgr.difficulty = diff;
         this._lastLevelGroup = 0;
@@ -901,6 +918,18 @@ class Game {
         if (shipType === SHIP_PURPLE_DEVIL) {
             this.player.wingsCooldown = 300 + Math.floor(Math.random() * 300);
             this.player.initDragon();
+        }
+
+        // Show special weapon tip for Brady and Caleb's ships
+        this._tipLines = [];
+        this._tipTimer = 0;
+        if (shipType === SHIP_DOUBLE_BLASTERY || shipType === SHIP_RED_BOMBER) {
+            this._tipLines = [
+                "SPECIAL WEAPON: Press B",
+                "Charges for 20s. Resets if hit.",
+                "Glow = ready to fire!",
+            ];
+            this._tipTimer = 150;  // ~5 seconds at 30fps logic ticks
         }
 
         // Switch to gameplay music
@@ -1070,6 +1099,12 @@ class Game {
     _update() {
         if (this.state === STATE_LOADING) return;
 
+        // Victory screen animation
+        if (this.state === STATE_VICTORY) {
+            this.victoryScreen.update();
+            return;
+        }
+
         // Tick secret S-key timer
         if (this.secretSTimer > 0) {
             this.secretSTimer--;
@@ -1178,6 +1213,9 @@ class Game {
             return;
         }
 
+        // Tick down gameplay tip overlay
+        if (this._tipTimer > 0) this._tipTimer--;
+
         // Check level complete
         if (this.enemyMgr.levelComplete()) {
             this.levelCompleteTimer++;
@@ -1250,9 +1288,10 @@ class Game {
             this.state = STATE_DEATH_ANIM;
             this.sound.play("explosion_large");
         } else if (this.player.alive) {
-            // Game completed (all levels done)
-            this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
-            this.state = STATE_SCORE;
+            // Game completed (all levels done) — show victory celebration!
+            this.victoryScreen.show();
+            this.sound.playSpecificTrack("music/Epic Chiptune End Credits Music.mp3", true);
+            this.state = STATE_VICTORY;
         }
     }
 
@@ -1303,6 +1342,37 @@ class Game {
             // Wave transition overlay
             if (this.waveTransition.active) {
                 this.waveTransition.draw(ctx, theme.stars || COLOR_FG);
+            }
+
+            // Gameplay tip overlay (fades out)
+            if (this._tipTimer > 0 && this._tipLines.length > 0) {
+                const fadeStart = 60;  // start fading in the last ~2 seconds
+                const alpha = this._tipTimer < fadeStart ? this._tipTimer / fadeStart : 1;
+                const fontSize = Math.floor(11 * SCALE / 4);
+                const lineH = fontSize + 4;
+                const totalH = this._tipLines.length * lineH + 12;
+                const boxW = Math.floor(SCREEN_WIDTH * 0.75);
+                const boxX = (SCREEN_WIDTH - boxW) / 2;
+                const boxY = Math.floor(SCREEN_HEIGHT * 0.15);
+
+                // Background box
+                ctx.globalAlpha = alpha * 0.75;
+                ctx.fillStyle = "rgb(10, 5, 30)";
+                ctx.fillRect(boxX, boxY, boxW, totalH);
+                ctx.strokeStyle = "rgb(150, 100, 220)";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(boxX, boxY, boxW, totalH);
+
+                // Text
+                ctx.globalAlpha = alpha;
+                ctx.font = `${fontSize}px monospace`;
+                for (let i = 0; i < this._tipLines.length; i++) {
+                    const line = this._tipLines[i];
+                    const tw = ctx.measureText(line).width;
+                    ctx.fillStyle = i === 0 ? "rgb(255, 220, 100)" : "rgb(200, 210, 240)";
+                    ctx.fillText(line, (SCREEN_WIDTH - tw) / 2, boxY + 8 + i * lineH);
+                }
+                ctx.globalAlpha = 1;
             }
 
         } else if (this.state === STATE_SHOP) {
@@ -1394,6 +1464,8 @@ class Game {
             this.changeLogScreen.draw(ctx);
         } else if (this.state === STATE_FEEDBACK) {
             this.feedbackScreen.draw(ctx);
+        } else if (this.state === STATE_VICTORY) {
+            this.victoryScreen.draw(ctx);
         } else if (this.state === STATE_SCORE) {
             this.scoreScreen.draw(ctx);
         } else if (this.state === STATE_HIGH_SCORES) {
@@ -1468,7 +1540,7 @@ class Game {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.57";
+        const subtitle = "Claude Edition 1.58";
         const stw = ctx.measureText(subtitle).width;
         ctx.fillText(subtitle, (SCREEN_WIDTH - stw) / 2, 16 * SCALE);
 

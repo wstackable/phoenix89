@@ -454,6 +454,23 @@ class SoundManager {
     }
 
     /**
+     * Play a specific music file (used for victory/credits screen).
+     * Loops by default. Stops any current music first.
+     */
+    playSpecificTrack(filePath, loop = true) {
+        this.stopMusic();
+        if (!this.musicEnabled) return;
+        try {
+            const blobUrl = this._blobUrls && this._blobUrls[filePath];
+            this.musicAudio = new Audio(blobUrl || filePath);
+            this.musicAudio.volume = 0.4;
+            this.musicAudio.loop = loop;
+            this.playingMenuMusic = false;
+            this.musicAudio.play().catch(() => {});
+        } catch(e) {}
+    }
+
+    /**
      * Configure music files. Call this after creating the SoundManager.
      * musicFiles: array of {name: "Track Name", file: "music/filename.mp3", isMenu: bool}
      */

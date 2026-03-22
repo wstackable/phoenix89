@@ -332,9 +332,11 @@ class Shop {
                 [SHIP_PHOENIX]: "The Phoenix", [SHIP_PURPLE_DEVIL]: "Purple Devil",
                 [SHIP_DOUBLE_BLASTERY]: "Double Blastery", [SHIP_RED_BOMBER]: "Red Bomber"
             };
-            const shipInfo = `Ship: ${shipNames[player.shipType] || '?'} | Shield: ${player.shield}/${MAX_SHIELD} | Bombs: ${player.bombs}/${MAX_BOMBS}`;
-            ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
-            ctx.fillText(shipInfo, 2 * SCALE, SCREEN_HEIGHT - 6 * SCALE);
+            ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+            const line1 = `Ship: ${shipNames[player.shipType] || '?'}`;
+            const line2 = `Shield: ${player.shield}/${MAX_SHIELD}   Bombs: ${player.bombs}/${MAX_BOMBS}   Cash: $${player.cash}`;
+            ctx.fillText(line1, 4 * SCALE, SCREEN_HEIGHT - 10 * SCALE);
+            ctx.fillText(line2, 4 * SCALE, SCREEN_HEIGHT - 5 * SCALE);
         }
         ctx.textBaseline = 'alphabetic';
     }
@@ -432,7 +434,7 @@ class TitleScreen {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.57";
+        const subtitle = "Claude Edition 1.58";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
@@ -707,7 +709,7 @@ class ChangeLogScreen {
         // Bottom prompt
         ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const prompt = "Press ESC to return";
+        const prompt = "\u2191\u2193 Scroll   |   ESC to return";
         const promptMetrics = ctx.measureText(prompt);
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
     }
@@ -1055,7 +1057,7 @@ class HighScoreScreen {
 
         this.loadingGlobal = true;
         this.lastFetchTime = now;
-        const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxGVgr1ZW6tjTrrmSy414-B_GIwjS3f7KGWuVRYW1RcS_Iq9pfrgAJ9RUp-gZLHEtx9kSuYye31EQ0/pub?output=csv&cachebust=" + now;
+        const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxGVgr1ZW6tjTrrmSy414-B_GIwjS3f7KGWuVRYW1RcS_Iq9pfrgAJ9RUp-gZLHEtx9kSuYye31EQ0/pub?gid=0&single=true&output=tsv&cachebust=" + now;
 
         fetch(sheetUrl)
             .then(r => r.text())
@@ -1063,8 +1065,8 @@ class HighScoreScreen {
                 const rows = csv.trim().split('\n').slice(1); // skip header
                 const parsed = [];
                 for (const row of rows) {
-                    // CSV: Timestamp, Name, Score, Difficulty
-                    const cols = row.split(',');
+                    // TSV: Timestamp, Name, Score, Difficulty
+                    const cols = row.split('\t');
                     if (cols.length >= 3) {
                         const name = (cols[1] || "???").replace(/"/g, '').trim();
                         const score = parseInt(cols[2], 10) || 0;
@@ -1229,6 +1231,365 @@ class HighScoreScreen {
     }
 }
 
+// ─── Victory / Credits Screen ──────────────────────────────
+
+class VictoryScreen {
+    constructor() {
+        this.active = false;
+        this.timer = 0;
+        this.fireworks = [];
+        this.scrollY = 0;
+        this.phase = 0;  // 0=celebration, 1=credits scroll
+        this._creditsLines = [];
+        this._totalCreditsH = 0;
+        this._starField = null;      // background stars (reuse StarField)
+        this._borders = null;        // scrolling borders
+        this._shipSprites = {};      // cached rendered ship sprites for credits
+        this._celebShips = [];       // floating ship parade during celebration
+    }
+
+    show() {
+        this.active = true;
+        this.timer = 0;
+        this.fireworks = [];
+        this.scrollY = 0;
+        this.phase = 0;
+        this._celebShips = [];
+        this._starField = new StarField();
+        this._borders = new ScrollingBorders();
+        this._cacheShipSprites();
+        this._buildCredits();
+    }
+
+    _cacheShipSprites() {
+        // Pre-render each special ship sprite at full size (for celebration flyby)
+        // and half size (for inline credits display)
+        const customNames = ["player_purple_devil", "player_double_blastery", "player_red_bomber", "player_phoenix"];
+        for (const name of customNames) {
+            const custom = getCustomSprite(name);
+            if (custom) {
+                this._shipSprites[name] = custom;
+                // Build a half-size version for inline credits
+                this._shipSprites[name + "_sm"] = this._buildSmallSprite(name);
+            }
+        }
+        // Also cache the default sigma ship with a bright color
+        if (RAW_SPRITES["player_sigma"]) {
+            const pixels = parseSpriteData(RAW_SPRITES["player_sigma"]);
+            this._shipSprites["player_sigma"] = createOffscreenCanvas(pixels, SCALE, [0, 255, 255]);
+            this._shipSprites["player_sigma_sm"] = createOffscreenCanvas(pixels, Math.floor(SCALE / 2), [0, 255, 255]);
+        }
+    }
+
+    _buildSmallSprite(name) {
+        // Re-render a custom color sprite at half scale for inline display
+        const defs = getCustomSpriteDefs();
+        if (!defs || !defs[name]) return null;
+        const [pixelMap, colors] = defs[name];
+        const halfScale = Math.floor(SCALE / 2);
+        const h = pixelMap.length;
+        let maxW = 0;
+        for (const row of pixelMap) maxW = Math.max(maxW, row.length);
+        const canvas = new OffscreenCanvas(maxW * halfScale, h * halfScale);
+        const ctx = canvas.getContext('2d');
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < pixelMap[y].length; x++) {
+                const ch = pixelMap[y][x];
+                if (ch === '.') continue;
+                const idx = parseInt(ch, 10);
+                if (idx >= 1 && idx <= colors.length) {
+                    const [r, g, b] = colors[idx - 1];
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x * halfScale, y * halfScale, halfScale, halfScale);
+                }
+            }
+        }
+        return canvas;
+    }
+
+    _buildCredits() {
+        // "sprite" field: name of cached ship sprite (uses _sm suffix for small inline version)
+        this._creditsLines = [
+            { text: "PHOENIX 89", size: 28, gap: 14, color: [255, 210, 50] },
+            { text: "Claude Edition", size: 14, gap: 24, color: [200, 180, 120] },
+            { text: "- - -  CONGRATULATIONS  - - -", size: 14, gap: 12, color: [255, 255, 180] },
+            { text: "You defeated the Megaboss", size: 12, gap: 6, color: [200, 220, 255] },
+            { text: "and saved the galaxy!", size: 12, gap: 30, color: [200, 220, 255] },
+
+            { text: "CREATED BY", size: 10, gap: 10, color: [140, 160, 200] },
+            { text: "Will Stackable", size: 18, gap: 28, color: [255, 255, 255] },
+
+            { text: "CREATIVE DIRECTORS", size: 10, gap: 10, color: [140, 160, 200] },
+            { text: "Brady Stackable", size: 14, gap: 10, color: [100, 180, 255], sprite: "player_double_blastery_sm" },
+            { text: "Elise Stackable", size: 14, gap: 10, color: [220, 100, 255], sprite: "player_purple_devil_sm" },
+            { text: "Caleb Stackable", size: 14, gap: 28, color: [255, 100, 80], sprite: "player_red_bomber_sm" },
+
+            { text: "INSPIRED BY", size: 10, gap: 10, color: [140, 160, 200] },
+            { text: "Phoenix for TI-89", size: 14, gap: 6, color: [202, 211, 185] },
+            { text: "by Patrick Davidson (~1998)", size: 12, gap: 28, color: [150, 170, 140] },
+
+            { text: "BUILT WITH", size: 10, gap: 10, color: [140, 160, 200] },
+            { text: "Claude Code", size: 14, gap: 28, color: [255, 200, 130] },
+
+            { text: "Thanks for playing!", size: 16, gap: 20, color: [255, 255, 200] },
+            { text: "March 2026", size: 12, gap: 40, color: [100, 120, 160] },
+
+            { text: "~ SECRET ~", size: 10, gap: 10, color: [180, 120, 255] },
+            { text: "Press S three times on the", size: 11, gap: 5, color: [160, 140, 220] },
+            { text: "main menu to open the", size: 11, gap: 5, color: [160, 140, 220] },
+            { text: "SECRET HANGAR", size: 14, gap: 14, color: [220, 170, 255] },
+            { text: "Unlock hidden ships:", size: 11, gap: 12, color: [150, 130, 200] },
+            { text: "Purple Devil", size: 12, gap: 10, color: [180, 60, 220], sprite: "player_purple_devil_sm" },
+            { text: "Double Blastery", size: 12, gap: 10, color: [100, 180, 255], sprite: "player_double_blastery_sm" },
+            { text: "Red Bomber", size: 12, gap: 10, color: [255, 100, 80], sprite: "player_red_bomber_sm" },
+            { text: "", size: 12, gap: 40, color: [0, 0, 0] },  // spacer before loop
+        ];
+        let h = 0;
+        for (const line of this._creditsLines) {
+            h += Math.floor(line.size * SCALE / 4) + line.gap;
+        }
+        this._totalCreditsH = h;
+    }
+
+    _spawnFirework() {
+        const x = 20 + Math.random() * (ORIG_WIDTH - 40);
+        const y = 10 + Math.random() * (ORIG_HEIGHT * 0.5);
+        // Use game-themed firework colors: neon, explosion, bullet colors from themes
+        const colors = [
+            [255, 210, 50],   // gold (phoenix)
+            [0, 255, 255],    // cyan (neon player)
+            [255, 0, 255],    // magenta (neon enemy)
+            [255, 255, 0],    // yellow (neon bullet)
+            [255, 80, 80],    // red (bomber)
+            [180, 60, 220],   // purple (devil)
+            [100, 180, 255],  // blue (blastery)
+            [80, 255, 80],    // green (cash pickup)
+            [255, 150, 50],   // orange (explosion)
+            [255, 130, 255],  // pink
+        ];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const count = 14 + Math.floor(Math.random() * 14);
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.4 + Math.random() * 1.8;
+            this.fireworks.push({
+                x, y,
+                dx: Math.cos(angle) * speed,
+                dy: Math.sin(angle) * speed,
+                life: 35 + Math.floor(Math.random() * 45),
+                maxLife: 80,
+                color,
+                size: 1 + Math.random(),
+            });
+        }
+    }
+
+    _spawnCelebShip() {
+        // Float a game ship across the celebration screen
+        const shipNames = ["player_sigma", "player_purple_devil", "player_double_blastery", "player_red_bomber", "player_phoenix"];
+        const name = shipNames[Math.floor(Math.random() * shipNames.length)];
+        const sprite = this._shipSprites[name];
+        if (!sprite) return;
+        const fromLeft = Math.random() > 0.5;
+        this._celebShips.push({
+            sprite,
+            x: fromLeft ? -20 : ORIG_WIDTH + 20,
+            y: 20 + Math.random() * (ORIG_HEIGHT * 0.6),
+            dx: fromLeft ? (0.3 + Math.random() * 0.6) : -(0.3 + Math.random() * 0.6),
+            dy: -0.1 + Math.random() * 0.2,
+            life: 300,
+        });
+    }
+
+    handleEvent(event) {
+        if (event.type === 'keydown') {
+            if (this.phase === 0 && this.timer > 60) {
+                // Move to credits scroll
+                this.phase = 1;
+                this.scrollY = 0;
+                this.timer = 0;
+                return false;
+            } else if (this.phase === 1 && this.timer > 90) {
+                // Any key during credits exits to score screen
+                this.active = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    update() {
+        this.timer++;
+
+        // Background animations
+        this._starField.update();
+        this._borders.update();
+
+        // Spawn fireworks
+        if (this.timer % 8 === 0) {
+            this._spawnFirework();
+        }
+
+        // Spawn celebration ships during phase 0
+        if (this.phase === 0 && this.timer % 50 === 0) {
+            this._spawnCelebShip();
+        }
+
+        // Update firework particles
+        for (let p of this.fireworks) {
+            p.x += p.dx;
+            p.y += p.dy;
+            p.dy += 0.03; // gravity
+            p.life--;
+        }
+        this.fireworks = this.fireworks.filter(p => p.life > 0);
+
+        // Update celebration ships
+        for (let s of this._celebShips) {
+            s.x += s.dx;
+            s.y += s.dy;
+            s.life--;
+        }
+        this._celebShips = this._celebShips.filter(s => s.life > 0);
+
+        // Auto-scroll credits — slow and readable, loops continuously
+        if (this.phase === 1) {
+            this.scrollY += 0.15;
+            // Loop: when all content has scrolled past the top, reset to bottom
+            const maxScroll = (this._totalCreditsH + SCREEN_HEIGHT) / SCALE;
+            if (this.scrollY * SCALE > this._totalCreditsH + SCREEN_HEIGHT) {
+                this.scrollY = 0;
+            }
+        }
+    }
+
+    draw(ctx) {
+        // Dark space background
+        ctx.fillStyle = "rgb(5, 5, 18)";
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        // Draw starfield (dim blue-white stars)
+        this._starField.draw(ctx, [60, 80, 120]);
+
+        // Draw scrolling borders (dim, subtle frame)
+        this._borders.draw(ctx, [30, 40, 70], [5, 5, 18]);
+
+        // Draw fireworks
+        for (const p of this.fireworks) {
+            const alpha = Math.max(0, p.life / p.maxLife);
+            const [r, g, b] = p.color;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            const px = Math.floor(p.x * SCALE);
+            const py = Math.floor(p.y * SCALE);
+            const sz = Math.floor(p.size * SCALE);
+            ctx.beginPath();
+            ctx.arc(px + sz / 2, py + sz / 2, sz, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        if (this.phase === 0) {
+            // Draw floating ships
+            for (const s of this._celebShips) {
+                const sx = Math.floor(s.x * SCALE);
+                const sy = Math.floor(s.y * SCALE);
+                ctx.globalAlpha = Math.min(1, s.life / 50);
+                ctx.drawImage(s.sprite, sx, sy);
+            }
+            ctx.globalAlpha = 1;
+
+            // Pulsing VICTORY text with gold glow
+            const pulse = 0.85 + 0.15 * Math.sin(this.timer * 0.08);
+            const fontSize = Math.floor(28 * SCALE / 4 * pulse);
+            const titleText = "VICTORY!";
+            ctx.font = `bold ${fontSize}px monospace`;
+
+            // Glow effect
+            const glowAlpha = 0.3 + 0.15 * Math.sin(this.timer * 0.06);
+            ctx.globalAlpha = glowAlpha;
+            ctx.fillStyle = "rgb(255, 180, 0)";
+            const tw0 = ctx.measureText(titleText).width;
+            ctx.fillText(titleText, (SCREEN_WIDTH - tw0) / 2 - 2, SCREEN_HEIGHT * 0.35 + 2);
+            ctx.fillText(titleText, (SCREEN_WIDTH - tw0) / 2 + 2, SCREEN_HEIGHT * 0.35 - 1);
+
+            // Main text
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = "rgb(255, 220, 60)";
+            ctx.fillText(titleText, (SCREEN_WIDTH - tw0) / 2, SCREEN_HEIGHT * 0.35);
+
+            // Subtitle
+            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            ctx.fillStyle = "rgb(200, 220, 255)";
+            const sub = "You beat Phoenix 89!";
+            const sw = ctx.measureText(sub).width;
+            ctx.fillText(sub, (SCREEN_WIDTH - sw) / 2, SCREEN_HEIGHT * 0.48);
+
+            // Blinking prompt
+            if (this.timer > 60 && Math.floor(this.timer / 20) % 2 === 0) {
+                ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+                ctx.fillStyle = "rgb(150, 150, 180)";
+                const prompt = "Press any key for credits";
+                const pw = ctx.measureText(prompt).width;
+                ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.72);
+            }
+        } else {
+            // Credits scroll with sprites
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            ctx.clip();
+
+            let y = SCREEN_HEIGHT - this.scrollY * SCALE;
+            for (const line of this._creditsLines) {
+                const fontSize = Math.floor(line.size * SCALE / 4);
+                ctx.font = line.size >= 20 ? `bold ${fontSize}px monospace` : `${fontSize}px monospace`;
+
+                const [cr, cg, cb] = line.color || [220, 230, 255];
+
+                // Skip blinking text when not visible
+                if (line.blink && Math.floor(this.timer / 25) % 2 !== 0) {
+                    y += fontSize + line.gap;
+                    continue;
+                }
+
+                ctx.fillStyle = `rgb(${cr}, ${cg}, ${cb})`;
+                const tw = ctx.measureText(line.text).width;
+
+                if (y > -fontSize * 2 && y < SCREEN_HEIGHT + fontSize * 2) {
+                    // If this line has an associated ship sprite, draw it alongside
+                    if (line.sprite && this._shipSprites[line.sprite]) {
+                        const spr = this._shipSprites[line.sprite];
+                        const sprGap = 8;
+                        const totalW = spr.width + sprGap + tw;
+                        const startX = (SCREEN_WIDTH - totalW) / 2;
+
+                        // Draw sprite vertically centered with the text baseline
+                        const sprY = y - Math.floor(spr.height * 0.7);
+                        ctx.drawImage(spr, startX, sprY);
+
+                        // Draw text after sprite
+                        ctx.fillText(line.text, startX + spr.width + sprGap, y);
+                    } else {
+                        ctx.fillText(line.text, (SCREEN_WIDTH - tw) / 2, y);
+                    }
+                }
+                y += fontSize + line.gap;
+            }
+            ctx.restore();
+
+            // Fixed "press any key" hint at bottom (not part of scrolling content)
+            if (this.timer > 90 && Math.floor(this.timer / 25) % 2 === 0) {
+                ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+                ctx.fillStyle = "rgba(150, 150, 180, 0.6)";
+                const hintText = "Press any key to continue";
+                const hw = ctx.measureText(hintText).width;
+                ctx.fillText(hintText, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 3 * SCALE);
+            }
+        }
+    }
+}
+
 // ─── Score Screen Class ────────────────────────────────────
 
 class ScoreScreen {
@@ -1342,6 +1703,14 @@ class SecretHangar {
         this.active = false;
         this.selected = 0;
         this.animCounter = 0;
+        this.difficulty = DIFF_BEGINNER;
+        this._diffNames = {
+            [DIFF_BEGINNER]: "Beginner",
+            [DIFF_INTERMEDIATE]: "Intermediate",
+            [DIFF_HARD]: "Hard",
+            [DIFF_EXPERT]: "Expert",
+        };
+        this._diffList = [DIFF_BEGINNER, DIFF_INTERMEDIATE, DIFF_HARD, DIFF_EXPERT];
         this.ships = [
             {
                 name: "Purple Devil",
@@ -1392,6 +1761,12 @@ class SecretHangar {
             this.selected = (this.selected - 1 + this.ships.length) % this.ships.length;
         } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
             this.selected = (this.selected + 1) % this.ships.length;
+        } else if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
+            const idx = this._diffList.indexOf(this.difficulty);
+            this.difficulty = this._diffList[(idx - 1 + this._diffList.length) % this._diffList.length];
+        } else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
+            const idx = this._diffList.indexOf(this.difficulty);
+            this.difficulty = this._diffList[(idx + 1) % this._diffList.length];
         } else if (event.key === 'Enter' || event.key === ' ') {
             return this.ships[this.selected];
         } else if (event.key === 'Escape') {
@@ -1516,11 +1891,25 @@ class SecretHangar {
             y += lineH;
         }
 
+        // Difficulty selector
+        const diffY = SCREEN_HEIGHT - 12 * SCALE;
+        ctx.fillStyle = `rgb(180, 160, 220)`;
+        ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+        const diffLabel = `\u25C0  ${this._diffNames[this.difficulty]}  \u25B6`;
+        const diffMetrics = ctx.measureText(diffLabel);
+        ctx.fillText(diffLabel, SCREEN_WIDTH / 2 - diffMetrics.width / 2, diffY);
+
+        ctx.fillStyle = `rgb(100, 85, 140)`;
+        ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
+        const diffHint = "\u2190 \u2192 to change difficulty";
+        const diffHintM = ctx.measureText(diffHint);
+        ctx.fillText(diffHint, SCREEN_WIDTH / 2 - diffHintM.width / 2, diffY + Math.floor(4 * SCALE));
+
         // Footer
         ctx.fillStyle = `rgb(120, 100, 160)`;
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
         const footer = "ENTER: Launch    ESC: Back";
         const footerMetrics = ctx.measureText(footer);
-        ctx.fillText(footer, SCREEN_WIDTH / 2 - footerMetrics.width / 2, SCREEN_HEIGHT - 5 * SCALE);
+        ctx.fillText(footer, SCREEN_WIDTH / 2 - footerMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
     }
 }

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Victory Screen Preview</title>
+    <style>
+        body { background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        canvas { border: 2px solid #333; image-rendering: pixelated; }
+        .info { position: fixed; top: 10px; left: 10px; color: #888; font-family: monospace; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="info">Victory Screen Preview — Click canvas, then press any key to advance</div>
+    <canvas id="c" width="640" height="560"></canvas>
+    <script>
+        const SCALE = 4;
+        const ORIG_WIDTH = 160;
+        const ORIG_HEIGHT = 140;
+        const SCREEN_WIDTH = ORIG_WIDTH * SCALE;
+        const SCREEN_HEIGHT = ORIG_HEIGHT * SCALE;
+
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+
+        // ── Sprite helpers ──
+        function parseSpriteData(data) {
+            const pixels = [];
+            for (const row of data) {
+                const r = [];
+                for (let bit = 31; bit >= 0; bit--) r.push((row >> bit) & 1);
+                pixels.push(r);
+            }
+            return pixels;
+        }
+        function trimSprite(pixels) {
+            let minCol = 999, maxCol = -1;
+            for (const row of pixels)
+                for (let x = 0; x < row.length; x++)
+                    if (row[x]) { minCol = Math.min(minCol, x); maxCol = Math.max(maxCol, x); }
+            if (minCol > maxCol) return [[[0]], 1];
+            return [pixels.map(r => r.slice(minCol, maxCol + 1)), maxCol - minCol + 1];
+        }
+        function createOffscreenCanvas(pixels, scale, fg) {
+            const [tp, w] = trimSprite(pixels);
+            const h = tp.length;
+            const c = new OffscreenCanvas(w * scale, h * scale);
+            const cx = c.getContext('2d');
+            for (let y = 0; y < h; y++)
+                for (let x = 0; x < tp[y].length; x++)
+                    if (tp[y][x]) { cx.fillStyle = `rgb(${fg[0]},${fg[1]},${fg[2]})`; cx.fillRect(x*scale, y*scale, scale, scale); }
+            return c;
+        }
+        function buildColorSprite(pixelMap, colors, scale) {
+            scale = scale || SCALE;
+            const h = pixelMap.length;
+            let maxW = 0;
+            for (const row of pixelMap) maxW = Math.max(maxW, row.length);
+            const c = new OffscreenCanvas(maxW * scale, h * scale);
+            const cx = c.getContext('2d');
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < pixelMap[y].length; x++) {
+                    const ch = pixelMap[y][x];
+                    if (ch === '.') continue;
+                    const idx = parseInt(ch, 10);
+                    if (idx >= 1 && idx <= colors.length) {
+                        const [r, g, b] = colors[idx - 1];
+                        cx.fillStyle = `rgb(${r},${g},${b})`;
+                        cx.fillRect(x * scale, y * scale, scale, scale);
+                    }
+                }
+            }
+            return c;
+        }
+
+        // ── Sprite data ──
+        const RAW_SPRITES = {
+            "player_sigma": [
+                0b00000000110000000001100000000000, 0b00000000110000100001100000000000,
+                0b00000000110001110001100000000000, 0b00000000110011011001100000000000,
+                0b00000000110110001101100000000000, 0b00000000111100000111100000000000,
+                0b00000000111000000011100000000000, 0b00000000110000000001100000000000,
+            ],
+        };
+        const PURPLE_DEVIL_MAP = [".........1.........","....3...111...3....","...33..11211..33...","..3311112112113.3..","..331111212111133..",".33111111111111133.","3.11111111111113.33","...1111.1111....33.","....11...11........"];
+        const PURPLE_DEVIL_COLORS = [[180,60,220],[80,140,255],[255,120,200]];
+        const DOUBLE_BLASTERY_MAP = ["........1........","...3...111...3...","..33..11211..33..","..333.1112111.333.","33321111211123333","3322111111112233.",".32..1111111..23.","......11311......"];
+        const DOUBLE_BLASTERY_COLORS = [[40,80,200],[100,180,255],[240,240,255]];
+        const RED_BOMBER_MAP = ["......1......",".....111.....","....11211....","...1112111...","..111121111..",".11111111111.","1111.111.1111","11...111...11"];
+        const RED_BOMBER_COLORS = [[220,40,40],[255,120,60]];
+        const GOLD_PHOENIX_MAP = [".....3.....","2...1.1...2","2..1...1..2","1111...1111","1111.3.1111","2..1...1..2","2..13331..2"];
+        const GOLD_PHOENIX_COLORS = [[255,210,50],[200,150,20],[255,250,180]];
+
+        const SPRITE_DEFS = {
+            "player_purple_devil": [PURPLE_DEVIL_MAP, PURPLE_DEVIL_COLORS],
+            "player_double_blastery": [DOUBLE_BLASTERY_MAP, DOUBLE_BLASTERY_COLORS],
+            "player_red_bomber": [RED_BOMBER_MAP, RED_BOMBER_COLORS],
+            "player_phoenix": [GOLD_PHOENIX_MAP, GOLD_PHOENIX_COLORS],
+        };
+
+        // ── StarField ──
+        class StarField {
+            constructor() {
+                this.stars = []; this.scrollY = 0;
+                let seed = 7689;
+                const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+                for (let i = 0; i < 60; i++) {
+                    const x = 2 + Math.floor(rng() * (ORIG_WIDTH - 5));
+                    const y = Math.floor(rng() * (ORIG_HEIGHT * 2));
+                    const style = ["cross","dot","plus"][Math.floor(rng() * 3)];
+                    this.stars.push([x, y, style]);
+                }
+            }
+            update() { this.scrollY += 0.5; if (this.scrollY >= ORIG_HEIGHT * 2) this.scrollY -= ORIG_HEIGHT * 2; }
+            draw(ctx, fgColor) {
+                const [r,g,b] = fgColor;
+                for (const [sx,sy,style] of this.stars) {
+                    const dy = (sy + this.scrollY) % (ORIG_HEIGHT * 2);
+                    if (dy >= ORIG_HEIGHT) continue;
+                    const px = Math.floor(sx * SCALE), py = Math.floor(dy * SCALE);
+                    let alpha = dy < ORIG_HEIGHT * 0.18 ? dy / (ORIG_HEIGHT * 0.18) : 1;
+                    if (alpha < 0.08) continue;
+                    ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+                    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+                    ctx.lineWidth = 1;
+                    const cx = px + SCALE + Math.floor(SCALE / 2), cy2 = py + SCALE + Math.floor(SCALE / 2);
+                    if (style === "cross") { ctx.beginPath(); ctx.moveTo(cx-SCALE,cy2-SCALE); ctx.lineTo(cx+SCALE,cy2+SCALE); ctx.moveTo(cx+SCALE,cy2-SCALE); ctx.lineTo(cx-SCALE,cy2+SCALE); ctx.stroke(); }
+                    else if (style === "plus") { ctx.beginPath(); ctx.moveTo(cx,cy2-SCALE); ctx.lineTo(cx,cy2+SCALE); ctx.moveTo(cx-SCALE,cy2); ctx.lineTo(cx+SCALE,cy2); ctx.stroke(); }
+                    else ctx.fillRect(cx, cy2, SCALE, SCALE);
+                }
+            }
+        }
+
+        // ── ScrollingBorders ──
+        class ScrollingBorders {
+            constructor() {
+                this.scrollY = 0; this.PATTERN_LEN = 128;
+                const LT0=[9,8,7,6,5,6,7,8,9,10,11,10,9,8,7,8], LT1=[9,10,11,11,11,11,10,9,8,7,8,9,8,7,8,9], LM=[0,1,0,0,0,1,0,0];
+                const RT0=[6,7,8,9,10,9,8,7,6,5,4,5,6,7,8,7], RT1=[6,5,4,4,4,4,5,6,7,8,7,6,7,8,7,6], RM=[1,1,0,1,0,0,0,0];
+                this.leftEdge = new Array(this.PATTERN_LEN); this.rightEdge = new Array(this.PATTERN_LEN);
+                for (let t=0;t<8;t++) { const lt=[LT0,LT1][LM[t]], rt=[RT0,RT1][RM[t]];
+                    for (let r=0;r<16;r++) { this.leftEdge[t*16+r]=lt[r]; this.rightEdge[t*16+r]=ORIG_WIDTH-1-rt[r]; } }
+            }
+            update() { this.scrollY+=1; if(this.scrollY>=this.PATTERN_LEN) this.scrollY-=this.PATTERN_LEN; }
+            draw(ctx, bc) {
+                const [br,bg2,bb]=bc;
+                for (let row=0;row<ORIG_HEIGHT;row++) {
+                    const pr=(row+Math.floor(this.scrollY))%this.PATTERN_LEN;
+                    const lb=this.leftEdge[pr], rb=this.rightEdge[pr], py=row*SCALE;
+                    for (let x=0;x<=lb;x++) { const d=lb-x, a=d===0?0.8:d===1?0.5:0.25; ctx.globalAlpha=a; ctx.fillStyle=`rgb(${br},${bg2},${bb})`; ctx.fillRect(x*SCALE,py,SCALE,SCALE); }
+                    for (let x=rb;x<ORIG_WIDTH;x++) { const d=x-rb, a=d===0?0.8:d===1?0.5:0.25; ctx.globalAlpha=a; ctx.fillStyle=`rgb(${br},${bg2},${bb})`; ctx.fillRect(x*SCALE,py,SCALE,SCALE); }
+                }
+                ctx.globalAlpha=1;
+            }
+        }
+
+        // ── VictoryScreen ──
+        class VictoryScreen {
+            constructor() {
+                this.active=false; this.timer=0; this.fireworks=[]; this.scrollY=0;
+                this.phase=0; this._creditsLines=[]; this._totalCreditsH=0;
+                this._starField=null; this._borders=null; this._shipSprites={}; this._celebShips=[];
+                this._music = null;
+            }
+            show() {
+                this.active=true; this.timer=0; this.fireworks=[]; this.scrollY=0;
+                this.phase=0; this._celebShips=[];
+                this._starField=new StarField(); this._borders=new ScrollingBorders();
+                this._cacheShipSprites(); this._buildCredits();
+            }
+            startMusic() {
+                try {
+                    this._music = new Audio("music/Epic Chiptune End Credits Music.mp3");
+                    this._music.volume = 0.4;
+                    this._music.loop = true;
+                    this._music.play().catch(() => {});
+                } catch(e) {}
+            }
+            stopMusic() {
+                if (this._music) { this._music.pause(); this._music = null; }
+            }
+            _cacheShipSprites() {
+                const halfScale = Math.floor(SCALE / 2);
+                for (const name of ["player_purple_devil","player_double_blastery","player_red_bomber","player_phoenix"]) {
+                    if (!SPRITE_DEFS[name]) continue;
+                    this._shipSprites[name] = buildColorSprite(SPRITE_DEFS[name][0], SPRITE_DEFS[name][1], SCALE);
+                    this._shipSprites[name + "_sm"] = buildColorSprite(SPRITE_DEFS[name][0], SPRITE_DEFS[name][1], halfScale);
+                }
+                if (RAW_SPRITES["player_sigma"]) {
+                    this._shipSprites["player_sigma"] = createOffscreenCanvas(parseSpriteData(RAW_SPRITES["player_sigma"]), SCALE, [0,255,255]);
+                    this._shipSprites["player_sigma_sm"] = createOffscreenCanvas(parseSpriteData(RAW_SPRITES["player_sigma"]), halfScale, [0,255,255]);
+                }
+            }
+            _buildCredits() {
+                this._creditsLines = [
+                    { text: "PHOENIX 89", size: 28, gap: 14, color: [255,210,50] },
+                    { text: "Claude Edition", size: 14, gap: 24, color: [200,180,120] },
+                    { text: "- - -  CONGRATULATIONS  - - -", size: 14, gap: 12, color: [255,255,180] },
+                    { text: "You defeated the Megaboss", size: 12, gap: 6, color: [200,220,255] },
+                    { text: "and saved the galaxy!", size: 12, gap: 30, color: [200,220,255] },
+                    { text: "CREATED BY", size: 10, gap: 10, color: [140,160,200] },
+                    { text: "Will Stackable", size: 18, gap: 28, color: [255,255,255] },
+                    { text: "CREATIVE DIRECTORS", size: 10, gap: 10, color: [140,160,200] },
+                    { text: "Brady Stackable", size: 14, gap: 10, color: [100,180,255], sprite: "player_double_blastery_sm" },
+                    { text: "Elise Stackable", size: 14, gap: 10, color: [220,100,255], sprite: "player_purple_devil_sm" },
+                    { text: "Caleb Stackable", size: 14, gap: 28, color: [255,100,80], sprite: "player_red_bomber_sm" },
+                    { text: "INSPIRED BY", size: 10, gap: 10, color: [140,160,200] },
+                    { text: "Phoenix for TI-89", size: 14, gap: 6, color: [202,211,185] },
+                    { text: "by Patrick Davidson (~1998)", size: 12, gap: 28, color: [150,170,140] },
+                    { text: "BUILT WITH", size: 10, gap: 10, color: [140,160,200] },
+                    { text: "Claude Code", size: 14, gap: 28, color: [255,200,130] },
+                    { text: "Thanks for playing!", size: 16, gap: 20, color: [255,255,200] },
+                    { text: "March 2026", size: 12, gap: 40, color: [100,120,160] },
+                    { text: "~ SECRET ~", size: 10, gap: 10, color: [180,120,255] },
+                    { text: "Press S three times on the", size: 11, gap: 5, color: [160,140,220] },
+                    { text: "main menu to open the", size: 11, gap: 5, color: [160,140,220] },
+                    { text: "SECRET HANGAR", size: 14, gap: 14, color: [220,170,255] },
+                    { text: "Unlock hidden ships:", size: 11, gap: 12, color: [150,130,200] },
+                    { text: "Purple Devil", size: 12, gap: 10, color: [180,60,220], sprite: "player_purple_devil_sm" },
+                    { text: "Double Blastery", size: 12, gap: 10, color: [100,180,255], sprite: "player_double_blastery_sm" },
+                    { text: "Red Bomber", size: 12, gap: 10, color: [255,100,80], sprite: "player_red_bomber_sm" },
+                    { text: "", size: 12, gap: 40, color: [0,0,0] },
+                ];
+                let h=0; for (const l of this._creditsLines) h += Math.floor(l.size*SCALE/4)+l.gap;
+                this._totalCreditsH=h;
+            }
+            _spawnFirework() {
+                const x=20+Math.random()*(ORIG_WIDTH-40), y=10+Math.random()*(ORIG_HEIGHT*0.5);
+                const colors=[[255,210,50],[0,255,255],[255,0,255],[255,255,0],[255,80,80],[180,60,220],[100,180,255],[80,255,80],[255,150,50],[255,130,255]];
+                const color=colors[Math.floor(Math.random()*colors.length)];
+                const count=14+Math.floor(Math.random()*14);
+                for (let i=0;i<count;i++) {
+                    const angle=Math.random()*Math.PI*2, speed=0.4+Math.random()*1.8;
+                    this.fireworks.push({x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life:35+Math.floor(Math.random()*45),maxLife:80,color,size:1+Math.random()});
+                }
+            }
+            _spawnCelebShip() {
+                const names=["player_sigma","player_purple_devil","player_double_blastery","player_red_bomber","player_phoenix"];
+                const name=names[Math.floor(Math.random()*names.length)];
+                const spr=this._shipSprites[name]; if(!spr) return;
+                const fl=Math.random()>0.5;
+                this._celebShips.push({sprite:spr,x:fl?-20:ORIG_WIDTH+20,y:20+Math.random()*(ORIG_HEIGHT*0.6),
+                    dx:fl?(0.3+Math.random()*0.6):-(0.3+Math.random()*0.6),dy:-0.1+Math.random()*0.2,life:300});
+            }
+            handleEvent(event) {
+                if (event.type==='keydown') {
+                    if (this.phase===0&&this.timer>60) {
+                        this.phase=1; this.scrollY=0; this.timer=0;
+                        return false;
+                    } else if (this.phase===1&&this.timer>90) {
+                        this.active=false; return true;
+                    }
+                }
+                return false;
+            }
+            update() {
+                this.timer++;
+                this._starField.update(); this._borders.update();
+                if (this.timer%8===0) this._spawnFirework();
+                if (this.phase===0&&this.timer%50===0) this._spawnCelebShip();
+                for (let p of this.fireworks) {p.x+=p.dx;p.y+=p.dy;p.dy+=0.03;p.life--;}
+                this.fireworks=this.fireworks.filter(p=>p.life>0);
+                for (let s of this._celebShips) {s.x+=s.dx;s.y+=s.dy;s.life--;}
+                this._celebShips=this._celebShips.filter(s=>s.life>0);
+                if (this.phase===1) {
+                    this.scrollY+=0.15;
+                    if (this.scrollY*SCALE > this._totalCreditsH + SCREEN_HEIGHT) {
+                        this.scrollY=0;
+                    }
+                }
+            }
+            draw(ctx) {
+                ctx.fillStyle="rgb(5,5,18)";
+                ctx.fillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
+                this._starField.draw(ctx,[60,80,120]);
+                this._borders.draw(ctx,[30,40,70]);
+                for (const p of this.fireworks) {
+                    const alpha=Math.max(0,p.life/p.maxLife); const [r,g,b]=p.color;
+                    ctx.globalAlpha=alpha; ctx.fillStyle=`rgb(${r},${g},${b})`;
+                    const px=Math.floor(p.x*SCALE),py=Math.floor(p.y*SCALE),sz=Math.floor(p.size*SCALE);
+                    ctx.beginPath(); ctx.arc(px+sz/2,py+sz/2,sz,0,Math.PI*2); ctx.fill();
+                }
+                ctx.globalAlpha=1;
+                if (this.phase===0) {
+                    for (const s of this._celebShips) {
+                        ctx.globalAlpha=Math.min(1,s.life/50);
+                        ctx.drawImage(s.sprite,Math.floor(s.x*SCALE),Math.floor(s.y*SCALE));
+                    }
+                    ctx.globalAlpha=1;
+                    const pulse=0.85+0.15*Math.sin(this.timer*0.08);
+                    const fontSize=Math.floor(28*SCALE/4*pulse);
+                    ctx.font=`bold ${fontSize}px monospace`;
+                    const titleText="VICTORY!";
+                    const tw0=ctx.measureText(titleText).width;
+                    const glowAlpha=0.3+0.15*Math.sin(this.timer*0.06);
+                    ctx.globalAlpha=glowAlpha; ctx.fillStyle="rgb(255,180,0)";
+                    ctx.fillText(titleText,(SCREEN_WIDTH-tw0)/2-2,SCREEN_HEIGHT*0.35+2);
+                    ctx.fillText(titleText,(SCREEN_WIDTH-tw0)/2+2,SCREEN_HEIGHT*0.35-1);
+                    ctx.globalAlpha=1; ctx.fillStyle="rgb(255,220,60)";
+                    ctx.fillText(titleText,(SCREEN_WIDTH-tw0)/2,SCREEN_HEIGHT*0.35);
+                    ctx.font=`${Math.floor(14*SCALE/4)}px monospace`; ctx.fillStyle="rgb(200,220,255)";
+                    const sub="You beat Phoenix 89!"; const sw=ctx.measureText(sub).width;
+                    ctx.fillText(sub,(SCREEN_WIDTH-sw)/2,SCREEN_HEIGHT*0.48);
+                    if (this.timer>60&&Math.floor(this.timer/20)%2===0) {
+                        ctx.font=`${Math.floor(11*SCALE/4)}px monospace`; ctx.fillStyle="rgb(150,150,180)";
+                        const pr="Press any key for credits"; const pw=ctx.measureText(pr).width;
+                        ctx.fillText(pr,(SCREEN_WIDTH-pw)/2,SCREEN_HEIGHT*0.72);
+                    }
+                } else {
+                    ctx.save(); ctx.beginPath(); ctx.rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT); ctx.clip();
+                    let y=SCREEN_HEIGHT-this.scrollY*SCALE;
+                    for (const line of this._creditsLines) {
+                        const fontSize=Math.floor(line.size*SCALE/4);
+                        ctx.font=line.size>=20?`bold ${fontSize}px monospace`:`${fontSize}px monospace`;
+                        const [cr,cg,cb]=line.color||[220,230,255];
+                        if (line.blink&&Math.floor(this.timer/25)%2!==0) {y+=fontSize+line.gap;continue;}
+                        ctx.fillStyle=`rgb(${cr},${cg},${cb})`;
+                        const tw=ctx.measureText(line.text).width;
+                        if (y>-fontSize*2&&y<SCREEN_HEIGHT+fontSize*2) {
+                            if (line.sprite&&this._shipSprites[line.sprite]) {
+                                const spr=this._shipSprites[line.sprite];
+                                const sprGap=8;
+                                const totalW=spr.width+sprGap+tw;
+                                const startX=(SCREEN_WIDTH-totalW)/2;
+                                ctx.drawImage(spr,startX,y-Math.floor(spr.height*0.7));
+                                ctx.fillText(line.text,startX+spr.width+sprGap,y);
+                            } else {
+                                ctx.fillText(line.text,(SCREEN_WIDTH-tw)/2,y);
+                            }
+                        }
+                        y+=fontSize+line.gap;
+                    }
+                    ctx.restore();
+
+                    // Fixed hint at bottom
+                    if (this.timer>90&&Math.floor(this.timer/25)%2===0) {
+                        ctx.font=`${Math.floor(10*SCALE/4)}px monospace`;
+                        ctx.fillStyle="rgba(150,150,180,0.6)";
+                        const hintText="Press any key to continue";
+                        const hw=ctx.measureText(hintText).width;
+                        ctx.fillText(hintText,(SCREEN_WIDTH-hw)/2,SCREEN_HEIGHT-3*SCALE);
+                    }
+                }
+            }
+        }
+
+        const vs=new VictoryScreen(); vs.show();
+        let musicStarted = false;
+        window.addEventListener('keydown',(e)=>{
+            if (!musicStarted) { vs.startMusic(); musicStarted = true; }
+            const done=vs.handleEvent(e);
+            if(done) { vs.stopMusic(); musicStarted = false; vs.show(); }
+        });
+        function loop(){vs.update();vs.draw(ctx);requestAnimationFrame(loop);}
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
