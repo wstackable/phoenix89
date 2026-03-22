@@ -534,9 +534,12 @@ class Game {
         }
 
         // Initialize audio on first interaction (browser blocks autoplay
-        // before user gesture). ensureAudioContext also retries any music
-        // that was blocked by autoplay policy.
-        this.sound.ensureAudioContext();
+        // before user gesture). Only retry pending music once — not on
+        // every keypress, to avoid race conditions during music transitions.
+        if (!this._audioUnlocked) {
+            this.sound.ensureAudioContext();
+            this._audioUnlocked = true;
+        }
 
         // Global keys: R cycles radio, M toggles music, C cycles themes
         // (disabled during feedback text input and high score entry)

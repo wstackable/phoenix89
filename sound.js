@@ -337,6 +337,7 @@ class SoundManager {
      */
     startMenuMusic() {
         if (!this.musicEnabled) return;
+        this._pendingMusicType = null;  // Clear pending — this is an explicit request
         this._playMusicTrack('menu');
     }
 
@@ -345,6 +346,7 @@ class SoundManager {
      */
     startMusic(resetTrack = false) {
         if (!this.musicEnabled) return;
+        this._pendingMusicType = null;  // Clear pending — this is an explicit request
         this.playingMenuMusic = false;
         if (resetTrack) this.currentTrack = 0;
         this._playMusicTrack('gameplay');
@@ -384,10 +386,14 @@ class SoundManager {
                     }
                 };
             }
-            this.musicAudio.play().catch(() => {
-                // Autoplay blocked — store pending music so it can be
-                // retried on next user interaction
-                this._pendingMusicType = type;
+            this.musicAudio.play().catch((err) => {
+                // Only store pending for autoplay blocks (NotAllowedError).
+                // Ignore AbortError — that fires when stopMusic() pauses an
+                // Audio whose play() promise hasn't resolved yet (race condition
+                // between menu→gameplay transitions).
+                if (err && err.name === 'NotAllowedError') {
+                    this._pendingMusicType = type;
+                }
             });
         } catch(e) {
             // Music not available, that's OK
@@ -478,17 +484,14 @@ window.soundManager = new SoundManager();
 
 // Configure music files (matching Python version's sound.py MUSIC_FILES)
 window.soundManager.setMusicFiles([
-    { name: "Space Cat Area 12",        file: "music/Space Cat Area 12.mp3",                isMenu: true },
-    { name: "Bip Bop",                  file: "music/bip-bop.wav",                          isMenu: false },
-    { name: "Effervesce",               file: "music/effervesce.wav",                       isMenu: false },
-    { name: "Running",                  file: "music/running.wav",                          isMenu: false },
-    { name: "Mountain Trials",          file: "music/mountain-trials.wav",                  isMenu: false },
-    { name: "Lights Out",               file: "music/lights-out.wav",                       isMenu: false },
+    { name: "Space Cat Area 51",        file: "music/Space Cat Area 51.mp3",                isMenu: true },
     { name: "Dragon Boss Battle",       file: "music/Amazing Dragon Boss Battle.mp3",       isMenu: false },
     { name: "Sherlock Holmes Anthem",   file: "music/Chiptune Sherlock Holmes Anthem.mp3",  isMenu: false },
-    { name: "Chiptune NoCR",            file: "music/Chiptune Music No Copyright.mp3",      isMenu: false },
     { name: "Darkstream Runner",        file: "music/Darkstream Runner Chiptune.mp3",       isMenu: false },
+    { name: "Epic Space Battle",        file: "music/Epic Space Battle.mp3",                isMenu: false },
+    { name: "Mountain Climbing",        file: "music/Mountain Climbing.wav",                isMenu: false },
     { name: "Slimey Fox Arcade",        file: "music/Slimey Fox Arcade Games.mp3",          isMenu: false },
+    { name: "Space after Dark",         file: "music/Space after Dark.wav",                 isMenu: false },
 ]);
 
 // Initialize audio on first user interaction

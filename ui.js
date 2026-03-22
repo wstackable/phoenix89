@@ -13,6 +13,28 @@ class HUD {
         const fg = fgColor || COLOR_FG;
         const bg = bgColor || COLOR_BG;
 
+        // ─── Radio song name display (top-right) ───
+        if (window.soundManager && window.soundManager.musicEnabled) {
+            const trackName = window.soundManager.getTrackName();
+            if (trackName && trackName !== "No Music") {
+                const radioText = `R: ${trackName}`;
+                const radioFontSize = Math.floor(11 * SCALE / 4);
+                ctx.font = `${radioFontSize}px monospace`;
+                const textWidth = ctx.measureText(radioText).width;
+                const rx = SCREEN_WIDTH - textWidth - 4 * SCALE;
+                const ry = 3 * SCALE;
+
+                // Semi-transparent background pill
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                const pad = Math.floor(SCALE * 0.8);
+                ctx.fillRect(rx - pad, ry - radioFontSize - pad + 2, textWidth + pad * 2, radioFontSize + pad * 2);
+
+                // Text with subtle color
+                ctx.fillStyle = 'rgba(180, 200, 255, 0.75)';
+                ctx.fillText(radioText, rx, ry);
+            }
+        }
+
         // Status bar background - 15 original rows to fit bar + text comfortably
         const statusY = (ORIG_HEIGHT - 15) * SCALE;
         ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
@@ -403,7 +425,7 @@ class TitleScreen {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.55";
+        const subtitle = "Claude Edition 1.56";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
