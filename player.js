@@ -202,7 +202,7 @@ class Player {
     }
 
     addCash(amount) {
-        this.cash = Math.min(this.cash + amount, 25000);
+        this.cash = Math.min(this.cash + amount, MAX_CASH);
     }
 
     update(keys) {

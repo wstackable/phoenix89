@@ -29,10 +29,17 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="640" height="400"></canvas>
+    <canvas id="gameCanvas" width="640" height="560"></canvas>
 
     <!-- Load scripts in order -->
+    <script src="economy.js"></script>
     <script src="constants.js"></script>
+    <script>
+        // Set canvas size from game constants
+        const c = document.getElementById('gameCanvas');
+        c.width = SCREEN_WIDTH;
+        c.height = SCREEN_HEIGHT;
+    </script>
     <script src="sprites.js"></script>
     <script src="sound.js"></script>
     <script src="player.js"></script>

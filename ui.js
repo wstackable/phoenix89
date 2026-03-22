@@ -365,7 +365,7 @@ class TitleScreen {
                 this.startLevel = Math.max(1, this.startLevel - 1);
                 return null;
             } else if (event.key === 'ArrowRight') {
-                this.startLevel = Math.min(20, this.startLevel + 1);
+                this.startLevel = Math.min(13, this.startLevel + 1);
                 return null;
             }
         }

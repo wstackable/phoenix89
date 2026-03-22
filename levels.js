@@ -382,11 +382,12 @@ function loadMegaboss(difficulty) {
     const enemies = [];
     const eC = makeEnemy(E_MBC);
     eC.hp = difficulty * 400;
+    eC.maxHp = eC.hp;  // Store for phase calculation
     enemies.push(eC);
     enemies.push(makeEnemy(E_MBL));
     enemies.push(makeEnemy(E_MBR));
-    // Pad for guard wheel slots
-    for (let i = 0; i < 5; i++) {
+    // Pad for guard wheel + bomb slots (8 slots for multi-phase spawning)
+    for (let i = 0; i < 8; i++) {
         const pad = new Enemy(ETYPE_STANDARD, 0, 0, 0, "", -1, EDESTRUCT_NORMAL);
         pad.alive = false;
         enemies.push(pad);
@@ -881,13 +882,23 @@ class LevelManager {
             return null;  // unknown level, skip
         }
 
-        // Scale enemy HP based on difficulty and progression
-        const diffBase = { 1: 1.0, 2: 1.15, 3: 1.3, 4: 1.5 }[this.difficulty] || 1.0;
-        const progress = Math.min(1.0, this.levelNumber / Math.max(1, this.sequence.length));
-        const hpMult = diffBase + progress * (0.5 + 0.3 * this.difficulty);
+        // Scale enemy HP based on level and difficulty
+        // Moderate curve across all 13 levels — keeps late game challenging
+        // without turning bosses into boring bullet sponges
+        //                       L0   L1   L2   L3   L4   L5   L6   L7   L8   L9  L10  L11  L12  L13
+        const levelMults = [1.0, 1.0, 1.2, 1.4, 1.6, 1.9, 2.2, 2.5, 2.9, 3.2, 3.4, 3.6, 3.8, 4.0];
+        const levelIdx = Math.min(this.currentLevelGroup, levelMults.length - 1);
+        const levelScale = levelMults[levelIdx];
+        // Difficulty multiplier on top
+        const diffScale = { 1: 0.8, 2: 1.0, 3: 1.3, 4: 1.6 }[this.difficulty] || 1.0;
+        const hpMult = levelScale * diffScale;
         for (const e of enemies) {
             if (e.hp < 32000) {
                 e.hp = Math.max(e.hp, Math.floor(e.hp * hpMult));
+                // Update maxHp if set (used for Megaboss phase calculation)
+                if (e.maxHp !== undefined) {
+                    e.maxHp = e.hp;
+                }
             }
         }
 

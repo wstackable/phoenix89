@@ -5,16 +5,17 @@
 // We scale up 4x for comfortable PC play
 const SCALE = 4;
 const ORIG_WIDTH = 160;  // TI-89 visible width
-const ORIG_HEIGHT = 100;  // TI-89 visible height
+const ORIG_HEIGHT = 140;  // Expanded from TI-89's 100 for more dodging room
 const SCREEN_WIDTH = ORIG_WIDTH * SCALE;
 const SCREEN_HEIGHT = ORIG_HEIGHT * SCALE;
 
 // The original coordinate system used 256x160 buffer with visible region
 // TI-89: visible (48,21)-(207,119), playable (48,96)-(207,121)
-// We remap to 0-based coords: x in [0,159], y in [0,99]
-// Player movement area: y in [75, 95] (bottom quarter, above HUD at y=96)
-const PLAYER_MIN_Y = 75;
-const PLAYER_MAX_Y = 84;  // bottom of ship stays above HUD separator at y=85
+// We remap to 0-based coords: x in [0,159], y in [0,139]
+// Player movement area: large area for dodging bullets
+// Player can fly up into mid-screen (risk/reward — closer to enemies)
+const PLAYER_MIN_Y = 30;
+const PLAYER_MAX_Y = 124;  // bottom of ship stays above HUD separator at y=125
 const PLAYER_MIN_X = 0;
 const PLAYER_MAX_X = 159;
 
@@ -56,24 +57,8 @@ const WEAPON_SNIPER_LASER = 8;     // Purple Devil: multi-color sniper
 const WEAPON_BLASTERY = 9;          // Double Blastery: rockets + fan lasers
 const WEAPON_RED_CHARGE = 10;       // Red Bomber: charge beam + drones
 
-// Shop items with prices
-const SHOP_ITEMS = [
-    ["Exit the shop!", 0],
-    ["1-point shield recharge", 50],
-    ["Extra bullet", 100],
-    ["Double Cannon (2)", 500],
-    ["Triple Cannon (3)", 1000],
-    ["Quadruple Cannon (4)", 1500],
-    ["Rapid-Fire Unit", 2500],
-    ["Homing Missiles (addon)", 2000],
-    ["Dual Plasma Cannon (5)", 3000],
-    ["New Ship: Heavy Destroyer", 3500],
-    ["Golden Arches (6)", 4000],
-    ["New Ship: The Phoenix", 5000],
-    ["Triple Plasma (7)", 6000],
-    ["Deluxe Plasma (8)", 8000],
-    ["Bombs x3", 750],
-];
+// Shop items — sourced from economy.js for easy tuning
+const SHOP_ITEMS = ECONOMY.shopItems;
 
 // Bomb settings
 const INITIAL_BOMBS = 3;
@@ -86,7 +71,7 @@ const MAX_BULLETS = 24;
 const INITIAL_BULLETS = 16;
 const MAX_ENEMIES = 26;
 const MAX_ENEMY_BULLETS = 16;
-const MAX_CASH = 25000;
+const MAX_CASH = ECONOMY.maxCash;
 
 // Player ship definitions: (width, height, armor, weapon_x_offset, speed)
 const SHIP_DEFS = {

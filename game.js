@@ -749,13 +749,31 @@ class Game {
         const diff = this.titleScreen.difficulty;
         this.levelMgr = new LevelManager(diff);
         this.enemyMgr.difficulty = diff;
+        this.weaponSystem.difficulty = diff;
         this._lastLevelGroup = 0;
         this.levelCompleteTimer = 0;
         this.cheatBuffer = "";
 
-        // Expert difficulty: start with half shield
-        if (diff === DIFF_EXPERT) {
-            this.player.shield = Math.floor(MAX_SHIELD / 2);
+        // ASM init_table: difficulty-scaled starting resources
+        // Beginner: shield=48($30), cash=$200, Double Cannon
+        // Intermediate: shield=32($20), cash=$50
+        // Hard: shield=16($10), cash=0
+        // Expert: shield=16($10), cash=0
+        // (Scaled proportionally to our MAX_SHIELD=31)
+        if (diff === DIFF_BEGINNER) {
+            this.player.shield = MAX_SHIELD;           // full shield
+            this.player.cash = 200;                     // starting cash
+            this.player.weaponsAvailable = 0b00000011;  // normal + double cannon
+            this.player.weaponSelected = WEAPON_DOUBLE;
+        } else if (diff === DIFF_INTERMEDIATE) {
+            this.player.shield = 21;                    // ~2/3 shield
+            this.player.cash = 50;
+        } else if (diff === DIFF_HARD) {
+            this.player.shield = 10;                    // ~1/3 shield
+            this.player.cash = 0;
+        } else if (diff === DIFF_EXPERT) {
+            this.player.shield = 10;                    // ~1/3 shield
+            this.player.cash = 0;
         }
 
         // Skip ahead to requested level
@@ -882,8 +900,9 @@ class Game {
                 this.state = STATE_PLAYING;
                 this.enemyMgr.scorePoints += 5;  // +5 per wave cleared
 
-                // Check if we entered a new level group (after a boss)
+                // Sync current level to enemy manager for economy scaling
                 const curGroup = this.levelMgr.currentLevelGroup;
+                this.enemyMgr.currentLevel = Math.max(1, curGroup);
 
                 if (curGroup > 0 && curGroup !== this._lastLevelGroup) {
                     this._lastLevelGroup = curGroup;
@@ -1002,6 +1021,8 @@ class Game {
                 // Transition to explosion so enemiesRemaining is tracked properly
                 e.etype = (e.destruct === EDESTRUCT_BOSS || e.width > 14) ? ETYPE_EXPLODE2 : ETYPE_EXPLODE;
                 e.animFrame = 0;
+                e.data = 0;              // Reset explosion timer
+                e.height = -10000;       // Make unhittable during explosion
                 this.sound.play("explosion_large");
             }
         }

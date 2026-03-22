@@ -153,20 +153,24 @@ class WeaponSystem {
             this._addBullet(gx + 5, gy - 7, -2, -6, 2, "bullet_quad", 1, 5, 7);
             this._addBullet(gx + 5, gy - 7, 2, -6, 2, "bullet_quad", 1, 5, 7);
         } else if (w === WEAPON_DUAL_PLASMA) {
-            this._addBullet(gx - 6, gy - 4, 0, -6, 8, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx + 2, gy - 4, 0, -6, 8, "bullet_plasma", 0, 5, 11);
+            // Rebalanced: 8→6 dmg per bolt (12 total, was 16)
+            this._addBullet(gx - 6, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx + 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
         } else if (w === WEAPON_GOLDEN_ARCHES) {
-            this._addBullet(gx + 3, gy + 4, 0.5, 2.5, 16, "bullet_blob", 2, 4, 6);
-            this._addBullet(gx - 3, gy + 4, -0.5, 2.5, 16, "bullet_blob", 2, 4, 6);
+            // Rebalanced: 16→10 dmg per blob (20 total, was 32)
+            this._addBullet(gx + 3, gy + 4, 0.5, 2.5, 10, "bullet_blob", 2, 4, 6);
+            this._addBullet(gx - 3, gy + 4, -0.5, 2.5, 10, "bullet_blob", 2, 4, 6);
         } else if (w === WEAPON_TRIPLE_PLASMA) {
-            this._addBullet(gx - 2, gy - 4, 0, -6, 8, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx - 6, gy - 4, 0, -6, 8, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx + 2, gy - 4, 0, -6, 8, "bullet_plasma", 0, 5, 11);
+            // Rebalanced: 8→6 dmg per bolt (18 total, was 24)
+            this._addBullet(gx - 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx - 6, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx + 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
         } else if (w === WEAPON_DELUXE_PLASMA) {
-            this._addBullet(gx - 1, gy - 4, -0.5, -9, 20, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx + 3, gy - 4, 0.5, -9, 20, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx - 3, gy - 4, -2, -9, 20, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx + 8, gy - 4, 2, -9, 20, "bullet_ultimate", 0, 5, 10);
+            // Rebalanced: 20→12 dmg per bolt (48 total, was 80)
+            this._addBullet(gx - 1, gy - 4, -0.5, -9, 12, "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx + 3, gy - 4, 0.5, -9, 12, "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx - 3, gy - 4, -2, -9, 12, "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx + 8, gy - 4, 2, -9, 12, "bullet_ultimate", 0, 5, 10);
         } else if (w === WEAPON_SNIPER_LASER) {
             // Purple Devil: quad star cannon
             this._addBullet(gx - 7, gy - 7, -2, -6, 3, "bullet_quad", 9, 5, 5);
@@ -204,7 +208,7 @@ class WeaponSystem {
         for (let i = 0; i < enemies.length; i++) {
             const e = enemies[i];
             if (!e.alive || e.y < 0 || e.hp <= 0) continue;
-            if ([2, 3, 4].includes(e.etype)) continue;  // ETYPE_EXPLODE, ETYPE_EXPLODE2, ETYPE_NONE
+            if (["EXPLODE", "EXPLODE2", "NONE"].includes(e.etype)) continue;
 
             const dx = (e.x + e.width / 2) - cx;
             const dy = (e.y + e.height / 2) - cy;
@@ -423,16 +427,29 @@ class WeaponSystem {
         }
     }
 
-    fireEnemyBomb(x, y, damage = 1) {
+    // ASM aim_bomb: On Expert, bombs/missiles track toward player (±1 vx if >5px away)
+    _aimBomb(bx, player) {
+        if (this.difficulty !== DIFF_EXPERT || !player) return 0;
+        const dx = player.x - bx;
+        if (dx > 5) return 1;
+        if (dx < -5) return -1;
+        return 0;
+    }
+
+    fireEnemyBomb(x, y, damage = 1, player = null) {
         if (this.enemyBullets.length < 16) {
-            const eb = new EnemyBullet(x + 3, y + 8, 0, 1, damage, "enemy_bomb", "normal");
+            const bx = x + 3;
+            const vx = this._aimBomb(bx, player);
+            const eb = new EnemyBullet(bx, y + 8, vx, 1, damage, "enemy_bomb", "normal");
             this.enemyBullets.push(eb);
         }
     }
 
-    fireEnemyMissile(x, y) {
+    fireEnemyMissile(x, y, player = null) {
         if (this.enemyBullets.length < 16) {
-            const eb = new EnemyBullet(x + 3, y + 8, 0, 2, 1, "missile", "arrow");
+            const bx = x + 3;
+            const vx = this._aimBomb(bx, player);
+            const eb = new EnemyBullet(bx, y + 8, vx, 2, 1, "missile", "arrow");
             this.enemyBullets.push(eb);
         }
     }
@@ -449,8 +466,8 @@ class WeaponSystem {
         if (this.enemyBullets.length >= 16) return;
 
         let sprite;
-        if (value <= 50) sprite = "cash_small";
-        else if (value <= 100) sprite = "cash_medium";
+        if (value <= ECONOMY.cashSpriteSmallMax) sprite = "cash_small";
+        else if (value <= ECONOMY.cashSpriteMediumMax) sprite = "cash_medium";
         else sprite = "cash_large";
 
         const eb = new EnemyBullet(x + 3, y + 8, 0, 1, -value, sprite, "normal");
@@ -841,7 +858,7 @@ class WeaponSystem {
 
         // Damage all on-screen enemies
         for (let e of enemies) {
-            if (e.alive && e.y >= 0 && ![2, 3, 4].includes(e.etype)) {
+            if (e.alive && e.y >= 0 && !["EXPLODE", "EXPLODE2", "NONE"].includes(e.etype)) {
                 e.takeDamage(30, this);  // BOMB_DAMAGE = 30
                 hitAny = true;
             }

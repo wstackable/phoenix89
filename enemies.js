@@ -219,6 +219,7 @@ class EnemyManager {
         this.scorePoints = 0;    // running score from kills
         this.cycleCounter = 0;  // global frame counter
         this.difficulty = DIFF_BEGINNER;
+        this.currentLevel = 1;   // current level group (1-9+) for economy scaling
         this.xyData = [];        // coordinate table for formation enemies
         this.flags = 0;          // bit flags for swoop entry paths
         this.weaponSystemRef = null;
@@ -316,19 +317,19 @@ class EnemyManager {
         } else if (etype === ETYPE_MEGABOSS_C) {
             this._aiMegabossC(e, idx, player, ws);
         } else if (etype === ETYPE_MEGABOSS_L) {
-            this._aiMegabossL(e, idx);
+            this._aiMegabossL(e, idx, player, ws);
         } else if (etype === ETYPE_MEGABOSS_R) {
-            this._aiMegabossR(e, idx);
+            this._aiMegabossR(e, idx, player, ws);
         } else if (etype === ETYPE_MEGABOSS_DIE) {
             this._aiMegabossDie(e);
         } else if (etype === ETYPE_MBW_ASCEND) {
-            this._aiMbwAscend(e, ws);
+            this._aiMbwAscend(e, player, ws);
         } else if (etype === ETYPE_MBW_SLIDE) {
-            this._aiMbwSlide(e, ws);
+            this._aiMbwSlide(e, player, ws);
         } else if (etype === ETYPE_MBW_DESCEND) {
-            this._aiMbwDescend(e, ws);
+            this._aiMbwDescend(e, player, ws);
         } else if (etype === ETYPE_MBW_DEFEND) {
-            this._aiMbwDefend(e, ws);
+            this._aiMbwDefend(e, player, ws);
         } else if (etype === ETYPE_BOMB) {
             this._aiBomb(e, player, ws);
         } else if (etype === ETYPE_EXPLODE) {
@@ -374,8 +375,10 @@ class EnemyManager {
             return;
         }
 
-        // In formation: swing movement
-        const phase = (this.cycleCounter >> 5) & 3;
+        // In formation: swing movement with difficulty-enhanced patterns
+        // Hard/Expert: faster swing cycle (shift 4 instead of 5 = 2× speed)
+        const shiftAmt = (this.difficulty >= DIFF_HARD) ? 4 : 5;
+        const phase = (this.cycleCounter >> shiftAmt) & 3;
         if (phase === 0) {
             e.x += 1;
         } else if (phase === 1) {
@@ -390,22 +393,57 @@ class EnemyManager {
             }
         }
 
-        // Shooting
+        // Hard/Expert: formation enemies occasionally dive toward player
+        if (this.difficulty >= DIFF_HARD && e.data === 1) {
+            // Every 256 cycles, check if this enemy should dive
+            if ((this.cycleCounter + idx * 37) % 256 === 0 && this.enemiesRemaining > 4) {
+                e.data = 2;  // enter dive state
+                e.diveTargetY = Math.min(e.y + 30, 70);
+                e.diveReturnY = e.y;
+                e.divePhase = 0;  // 0=diving down, 1=returning
+            }
+        }
+
+        // Handle dive state
+        if (e.data === 2) {
+            if (e.divePhase === 0) {
+                e.y += 2;
+                // Track player X slightly
+                if (e.x < player.x) e.x += 1;
+                else if (e.x > player.x) e.x -= 1;
+                if (e.y >= e.diveTargetY) {
+                    e.divePhase = 1;
+                }
+            } else {
+                e.y -= 1;
+                if (e.y <= e.diveReturnY) {
+                    e.y = e.diveReturnY;
+                    e.data = 1;  // back to formation
+                }
+            }
+        }
+
+        // ASM-style cycle-based deterministic firing
+        // Only odd-indexed enemies fire (matches ASM d7 bit 0 check)
+        // Fires when (cycleCounter + idx*7) % scaledChance === 0
         const d7Bit0 = idx & 1;
         if (d7Bit0) {
-            const roll = Math.floor(Math.random() * fireChance);
-            if (roll === 0) {
+            // Scale fire chance by difficulty: Expert fires ~2× more
+            const diffScale = { 1: 1.5, 2: 1.0, 3: 0.75, 4: 0.5 }[this.difficulty] || 1.0;
+            const scaledChance = Math.max(8, Math.floor(fireChance * diffScale));
+            const firePhase = (this.cycleCounter + idx * 7) % scaledChance;
+            if (firePhase === 0) {
                 fireFunc.call(this, e, player, ws);
             }
         }
     }
 
     _fireBomb(e, player, ws) {
-        ws.fireEnemyBomb(e.x, e.y);
+        ws.fireEnemyBomb(e.x, e.y, 1, player);
     }
 
     _fireMissile(e, player, ws) {
-        ws.fireEnemyMissile(e.x, e.y);
+        ws.fireEnemyMissile(e.x, e.y, player);
     }
 
     _fireArrow(e, player, ws) {
@@ -478,21 +516,23 @@ class EnemyManager {
     _aiSpinnerModified(e, idx, player, ws) {
         this._spinAnimate(e);
 
+        // Cycle-based firing for free-moving spinners
         const d7Bit0 = idx & 1;
         if (d7Bit0) {
-            const fireRoll = Math.floor(Math.random() * 64);
-            if (fireRoll === 0) {
+            const diffScale = { 1: 1.5, 2: 1.0, 3: 0.75, 4: 0.5 }[this.difficulty] || 1.0;
+            const scaledChance = Math.max(8, Math.floor(53 * diffScale));
+            if ((this.cycleCounter + idx * 11) % scaledChance === 0) {
                 this._fireCannon(e, player, ws);
             }
         }
 
-        // Movement: operator-style
+        // Movement: operator-style with cycle-based direction changes
         e.y += e.dataY;
         if (e.y >= 65) {
             e.dataY = -1;
         } else if (e.y <= 29) {
             e.dataY = 1;
-        } else if (e.y === 47 && Math.random() < 0.5) {
+        } else if (e.y === 47 && (this.cycleCounter + idx * 13) % 4 === 0) {
             e.dataY = -1;
         }
 
@@ -501,7 +541,7 @@ class EnemyManager {
             e.dataX = 1;
         } else if (e.x >= 144) {
             e.dataX = -1;
-        } else if ((Math.floor(e.x) & 31) === 0 && Math.random() < 0.5) {
+        } else if ((Math.floor(e.x) & 31) === 0 && (this.cycleCounter + idx * 17) % 4 === 0) {
             e.dataX = -e.dataX;
         }
     }
@@ -536,6 +576,7 @@ class EnemyManager {
             e.dataX = 1;
         }
 
+        // ASM: lsr.b #1,d0; bcc no_y_adjust (odd cycles = Y adjust, even = fire check)
         if (this.cycleCounter & 1) {
             e.y += e.dataY;
             if (e.y <= 0) {
@@ -544,8 +585,11 @@ class EnemyManager {
                 e.dataY = -1;
             }
         } else {
-            // Shooting (when not moving Y): every 32 frames
-            if (e.width !== 34 && (this.cycleCounter & 31) === 0) {
+            // ASM: d0 = cycleCounter >> 1, then and.w #31 (or #15 for Expert)
+            // Fires every 64 cycles (32 on Expert)
+            const d0 = this.cycleCounter >> 1;
+            const fireRate = this.difficulty === DIFF_EXPERT ? 15 : 31;
+            if (e.width !== 34 && (d0 & fireRate) === 0) {
                 ws.fireEnemyAimed(e.x, e.y + 8, player);
                 ws.fireEnemyAimed(e.x + 14, e.y + 8, player);
             }
@@ -610,10 +654,11 @@ class EnemyManager {
             return;
         }
 
-        // Shooting
+        // Cycle-based firing for operators
         if (idx & 1) {
-            const roll = Math.floor(Math.random() * 64);
-            if (roll === 0) {
+            const diffScale = { 1: 1.5, 2: 1.0, 3: 0.75, 4: 0.5 }[this.difficulty] || 1.0;
+            const scaledChance = Math.max(8, Math.floor(50 * diffScale));
+            if ((this.cycleCounter + idx * 11) % scaledChance === 0) {
                 this._fireCannon(e, player, ws);
             }
         }
@@ -624,7 +669,7 @@ class EnemyManager {
             e.dataY = -1;
         } else if (e.y <= 29) {
             e.dataY = 1;
-        } else if (e.y === 47 && Math.random() < 0.5) {
+        } else if (e.y === 47 && (this.cycleCounter + idx * 13) % 4 === 0) {
             e.dataY = -1;
         }
 
@@ -634,7 +679,7 @@ class EnemyManager {
             e.dataX = 1;
         } else if (e.x >= 144) {
             e.dataX = -1;
-        } else if ((Math.floor(e.x) & 31) === 0 && Math.random() < 0.5) {
+        } else if ((Math.floor(e.x) & 31) === 0 && (this.cycleCounter + idx * 17) % 4 === 0) {
             e.dataX = -e.dataX;
         }
     }
@@ -663,7 +708,10 @@ class EnemyManager {
             e.dataY = -(Math.floor(Math.random() * 3) + 1);
         }
 
-        if ((this.cycleCounter & 255) === 0) {
+        // Difficulty-scaled triangle firing: Expert every ~128, Beginner every ~256
+        const triFireMask = this.difficulty === DIFF_EXPERT ? 127 :
+                             this.difficulty === DIFF_HARD ? 191 : 255;
+        if ((this.cycleCounter & triFireMask) === 0) {
             ws.fireEnemyAimed(e.x + 4, e.y + 3, player);
         }
     }
@@ -845,33 +893,40 @@ class EnemyManager {
             e.spriteName = "swoop2";
         }
 
-        // Shoot approximately every 64 frames
-        if ((this.cycleCounter & 63) === (Math.floor(e.x) % 26)) {
+        // Difficulty-scaled swoop firing rate: Expert fires every ~32 frames, Beginner ~80
+        const swoopFireMask = this.difficulty === DIFF_EXPERT ? 31 :
+                               this.difficulty === DIFF_HARD ? 47 : 63;
+        if ((this.cycleCounter & swoopFireMask) === (Math.floor(e.x) % 26)) {
             if (this.difficulty === DIFF_EXPERT) {
+                // Expert: aimed 3× damage bullets
                 ws.fireEnemyAimed(e.x + 4, e.y + 4, player, 3, 2.0);
+            } else if (this.difficulty === DIFF_HARD) {
+                // Hard: aimed normal damage
+                ws.fireEnemyAimed(e.x + 4, e.y + 4, player, 1, 2.0);
             } else {
                 ws.fireEnemyBullet(e.x + 6, e.y + 4, player, "normal");
             }
         }
 
-        // Movement
+        // Movement: faster on Expert
+        const swoopSpeed = this.difficulty >= DIFF_HARD ? 2 : 1;
         const path = e.swoopPath;
         const [entryX, xv, slideY, exitX] = SWOOP_DATA[path];
 
         if (e.y === slideY) {
-            e.x += xv;
+            e.x += xv * swoopSpeed;
             if ((xv > 0 && e.x >= exitX) || (xv < 0 && e.x <= exitX)) {
                 e.y -= 1;
             }
         } else if (e.x === exitX || (xv > 0 && e.x > exitX) || (xv < 0 && e.x < exitX)) {
-            e.y -= 1;
+            e.y -= swoopSpeed;
             if (e.y < -10) {
                 e.alive = false;
                 this.enemiesRemaining -= 1;
                 this.flags &= ~(1 << path);
             }
         } else {
-            e.y += 1;
+            e.y += swoopSpeed;
         }
     }
 
@@ -883,8 +938,22 @@ class EnemyManager {
             e.x = parent.x;
             e.y = parent.y;
         }
-        if (e.x + 5 > 0 && (this.cycleCounter & 63) === (idx & 63)) {
-            ws.fireEnemyAimed(e.x + 5, e.y + 8, player);
+        if (e.x + 5 <= 0) return;
+
+        // Aggressive firing: base rate every 32 frames, Expert every 20
+        const fireRate = this.difficulty === DIFF_EXPERT ? 19 : 31;
+        const cc = (this.cycleCounter + 1 + idx * 7);
+
+        if ((cc & fireRate) === 0) {
+            ws.fireEnemyAimed(e.x + 5, e.y + 8, player, 1, "bubble", 2.0);
+        }
+        // Burst fire: second shot 8 frames later
+        if (((cc - 8) & fireRate) === 0) {
+            ws.fireEnemyAimed(e.x + 3, e.y + 10, player, 1, "bubble", 1.6);
+        }
+        // Hard/Expert: occasional guided missile
+        if (this.difficulty >= DIFF_HARD && (cc % 97) === 0) {
+            ws.fireEnemyGuided(e.x, e.y + 4, player);
         }
     }
 
@@ -894,54 +963,190 @@ class EnemyManager {
             e.x = parent.x + 17;
             e.y = parent.y;
         }
-        if (e.x + 5 > 0 && (this.cycleCounter & 63) === (idx & 63)) {
-            ws.fireEnemyAimed(e.x + 5, e.y + 8, player);
+        if (e.x + 5 <= 0) return;
+
+        // Aggressive firing: offset from L side for alternating volleys
+        const fireRate = this.difficulty === DIFF_EXPERT ? 19 : 31;
+        const cc = (this.cycleCounter + idx * 7);
+
+        if ((cc & fireRate) === 0) {
+            ws.fireEnemyAimed(e.x + 5, e.y + 8, player, 1, "bubble", 2.0);
+        }
+        // Burst fire: second shot 8 frames later
+        if (((cc - 8) & fireRate) === 0) {
+            ws.fireEnemyAimed(e.x + 7, e.y + 10, player, 1, "bubble", 1.6);
+        }
+        // Hard/Expert: occasional spread (3 bullets in fan)
+        if (this.difficulty >= DIFF_HARD && ((cc + 48) % 97) === 0) {
+            const fakeL = { x: player.x - 25, y: player.y };
+            const fakeR = { x: player.x + 25, y: player.y };
+            ws.fireEnemyAimed(e.x + 5, e.y + 8, player, 1, "bubble", 1.8);
+            ws.fireEnemyAimed(e.x + 5, e.y + 8, fakeL, 1, "bubble", 1.5);
+            ws.fireEnemyAimed(e.x + 5, e.y + 8, fakeR, 1, "bubble", 1.5);
         }
     }
 
     // ─── MEGABOSS ──────────────────────────────────────────────
+    // Multi-phase epic boss fight:
+    //   Phase 1 (>66% HP): Steady sweep, bomb volleys, guard wheel spawns
+    //   Phase 2 (33-66%): Faster, aimed spreads, side cannons activate, dives
+    //   Phase 3 (<33%): Frantic, all weapons, continuous wheel spawns, charges
+
+    _getMegabossPhase(e) {
+        if (!e.maxHp || e.maxHp <= 0) return 1;
+        const pct = e.hp / e.maxHp;
+        if (pct > 0.66) return 1;
+        if (pct > 0.33) return 2;
+        return 3;
+    }
 
     _aiMegabossC(e, idx, player, ws) {
+        // --- Entrance sequence ---
         if (e.y < 0) {
             e.y = 0;
             e.data = 1;
             e.x = 54;
+            e.mbDiveState = 0;      // 0 = normal sweep, 1 = diving down, 2 = returning
+            e.mbBaseY = 17;         // home row
+            e.mbDiveTarget = 17;
             return;
         }
 
-        if (e.y < 17) {
+        if (e.y < 17 && !e.mbDiveState) {
             e.y += 1;
             return;
         }
 
-        // Sweeping
-        if (this.cycleCounter & 1) {
-            const shotType = this.cycleCounter & 7;
-            if (shotType >= 6) {
-                if ((this.cycleCounter & 0x1C) === 0) {
-                    this._megabossFireBomb(e, idx, player, ws);
-                }
+        // Initialize dive state if not set
+        if (e.mbDiveState === undefined) {
+            e.mbDiveState = 0;
+            e.mbBaseY = 17;
+            e.mbDiveTarget = 17;
+        }
+
+        const phase = this._getMegabossPhase(e);
+        const cc = this.cycleCounter;
+
+        // --- Dive mechanic (Phase 2+): boss dips toward player then retreats ---
+        if (e.mbDiveState === 1) {
+            e.y += 1;
+            if (e.y >= e.mbDiveTarget) {
+                e.y = e.mbDiveTarget;
+                e.mbDiveState = 2;
             }
-        } else {
-            e.x += e.data;
-            if (e.x <= 32) {
+            // Fire while diving!
+            if ((cc & 7) === 0) {
+                ws.fireEnemyAimed(e.x + 8, e.y + 14, player, 1, "bubble", 2.5);
+            }
+        } else if (e.mbDiveState === 2) {
+            e.y -= 1;
+            if (e.y <= e.mbBaseY) {
+                e.y = e.mbBaseY;
+                e.mbDiveState = 0;
+            }
+        }
+
+        // --- Trigger dives in Phase 2+ ---
+        if (phase >= 2 && e.mbDiveState === 0) {
+            const diveChance = phase === 3 ? 127 : 255;
+            if ((cc % diveChance) === 73) {
+                e.mbDiveState = 1;
+                // Dive deeper in Phase 3
+                e.mbDiveTarget = phase === 3 ? 40 : 30;
+            }
+        }
+
+        // --- Movement (every frame in Phase 3, odd frames otherwise) ---
+        const moveThisFrame = phase === 3 || (cc & 1);
+        if (moveThisFrame && e.mbDiveState === 0) {
+            // Speed scales with phase
+            const speed = phase === 3 ? 2 : (phase === 2 ? 1.5 : 1);
+            e.x += e.data * speed;
+
+            if (e.x <= 20) {
                 e.data = 1;
                 this._spawnMbw(idx, 3, e.x + 2, e.y, -1);
-            } else if (e.x >= 94) {
+            } else if (e.x >= 100) {
                 e.data = -1;
                 this._spawnMbw(idx, 4, e.x + 2, e.y, 1);
             }
+            // Phase 3: also try to spawn wheels from additional slots
+            if (phase === 3 && (cc & 63) === 0) {
+                for (let s = 5; s <= 7; s++) {
+                    const dir = (s & 1) ? -1 : 1;
+                    this._spawnMbw(idx, s, e.x + 8, e.y, dir);
+                    break;  // spawn one at a time
+                }
+            }
+        }
+
+        // --- Attack patterns by phase ---
+
+        // Phase 1: Bomb volleys every 48 frames
+        if (phase >= 1) {
+            const bombRate = phase === 3 ? 24 : (phase === 2 ? 36 : 48);
+            if ((cc % bombRate) === 0) {
+                this._megabossFireBomb(e, idx, e.x + 3, e.y + 8);
+                if (phase >= 2) {
+                    // Second bomb offset
+                    this._megabossFireBomb(e, idx, e.x + 13, e.y + 8);
+                }
+            }
+        }
+
+        // Phase 2+: Aimed bullet spreads every 40 frames
+        if (phase >= 2) {
+            const spreadRate = phase === 3 ? 20 : 40;
+            if ((cc % spreadRate) === Math.floor(spreadRate / 2)) {
+                this._megabossFireSpread(e, player, ws, phase === 3 ? 5 : 3);
+            }
+        }
+
+        // Phase 3: Rapid aimed fire
+        if (phase === 3 && (cc & 11) === 0) {
+            ws.fireEnemyAimed(e.x + 8, e.y + 14, player, 1, "bubble", 2.2);
+        }
+
+        // Phase 2+: Guided missiles from edges of boss
+        if (phase >= 2 && (cc % 53) === 0) {
+            ws.fireEnemyGuided(e.x, e.y + 8, player);
+        }
+        if (phase === 3 && (cc % 53) === 26) {
+            ws.fireEnemyGuided(e.x + 14, e.y + 8, player);
         }
     }
 
-    _megabossFireBomb(e, idx, player, ws) {
+    _megabossFireSpread(e, player, ws, count) {
+        const cx = e.x + 8;
+        const cy = e.y + 14;
+        // Center shot
+        ws.fireEnemyAimed(cx, cy, player, 1, "bubble", 2.0);
+
+        if (count >= 3) {
+            // Side shots aimed at offset positions
+            const fakeL = { x: player.x - 20, y: player.y };
+            const fakeR = { x: player.x + 20, y: player.y };
+            ws.fireEnemyAimed(cx - 3, cy, fakeL, 1, "bubble", 1.7);
+            ws.fireEnemyAimed(cx + 3, cy, fakeR, 1, "bubble", 1.7);
+        }
+        if (count >= 5) {
+            // Wide fan shots
+            const fakeWL = { x: player.x - 45, y: player.y };
+            const fakeWR = { x: player.x + 45, y: player.y };
+            ws.fireEnemyAimed(cx - 5, cy, fakeWL, 1, "bubble", 1.4);
+            ws.fireEnemyAimed(cx + 5, cy, fakeWR, 1, "bubble", 1.4);
+        }
+    }
+
+    _megabossFireBomb(e, idx, bx, by) {
+        // Find a free slot in the enemy array to spawn a bomb entity
         for (let i = 5; i < this.enemies.length; i++) {
             const candidate = this.enemies[i];
             if (!candidate.alive || candidate.etype === ETYPE_NONE) {
                 candidate.alive = true;
                 candidate.etype = ETYPE_BOMB;
-                candidate.x = e.x + 5;
-                candidate.y = e.y + 8;
+                candidate.x = bx;
+                candidate.y = by;
                 candidate.width = 7;
                 candidate.height = 7;
                 candidate.hp = 20;
@@ -975,19 +1180,108 @@ class EnemyManager {
         this.enemiesRemaining += 1;
     }
 
-    _aiMegabossL(e, idx) {
-        if (idx >= 1) {
-            const center = this.enemies[idx - 1];
+    // Side cannons: follow center while alive, become independent enraged bosses when center dies
+    _isMegabossCenterAlive(centerEnemy) {
+        return centerEnemy && centerEnemy.alive &&
+               (centerEnemy.etype === ETYPE_MEGABOSS_C);
+    }
+
+    _aiMegabossL(e, idx, player, ws) {
+        const center = idx >= 1 ? this.enemies[idx - 1] : null;
+        const centerAlive = this._isMegabossCenterAlive(center);
+
+        if (centerAlive) {
+            // --- Following center ---
             e.x = center.x - 17;
             e.y = center.y;
+
+            const phase = this._getMegabossPhase(center);
+            if (phase >= 2) {
+                const fireRate = phase === 3 ? 15 : 31;
+                if (((this.cycleCounter + 5) & fireRate) === 0) {
+                    ws.fireEnemyAimed(e.x + 8, e.y + 12, player, 1, "bubble", 1.8);
+                }
+                if (phase === 3 && (this.cycleCounter % 41) === 0) {
+                    ws.fireEnemyBomb(e.x + 4, e.y, 1, player);
+                }
+            }
+        } else {
+            // --- Center is dead: ENRAGED independent mode ---
+            this._aiMegabossSideEnraged(e, player, ws, -1);
         }
     }
 
-    _aiMegabossR(e, idx) {
-        if (idx >= 2) {
-            const center = this.enemies[idx - 2];
+    _aiMegabossR(e, idx, player, ws) {
+        const center = idx >= 2 ? this.enemies[idx - 2] : null;
+        const centerAlive = this._isMegabossCenterAlive(center);
+
+        if (centerAlive) {
+            // --- Following center ---
             e.x = center.x + 17;
             e.y = center.y;
+
+            const phase = this._getMegabossPhase(center);
+            if (phase >= 2) {
+                const fireRate = phase === 3 ? 15 : 31;
+                if (((this.cycleCounter + 13) & fireRate) === 0) {
+                    ws.fireEnemyAimed(e.x + 4, e.y + 12, player, 1, "bubble", 1.8);
+                }
+                if (phase === 3 && (this.cycleCounter % 47) === 0) {
+                    ws.fireEnemyBomb(e.x + 4, e.y, 1, player);
+                }
+            }
+        } else {
+            // --- Center is dead: ENRAGED independent mode ---
+            this._aiMegabossSideEnraged(e, player, ws, 1);
+        }
+    }
+
+    _aiMegabossSideEnraged(e, player, ws, startDir) {
+        // First frame of enraged mode: initialize independent movement
+        if (!e.mbEnraged) {
+            e.mbEnraged = true;
+            e.dataX = startDir;
+            e.dataY = 1;
+            // Become a real killable boss with substantial HP
+            e.destruct = EDESTRUCT_BOSS;
+            e.hp = Math.max(e.hp, 80);
+            e.maxHp = e.hp;
+        }
+
+        // Independent bouncing movement — fast and aggressive
+        e.x += e.dataX * 2;
+        if (e.x <= 2) e.dataX = 1;
+        else if (e.x >= 140) e.dataX = -1;
+
+        if (this.cycleCounter & 1) {
+            e.y += e.dataY;
+            if (e.y <= 0) e.dataY = 1;
+            else if (e.y >= 45) e.dataY = -1;
+        }
+
+        const cc = this.cycleCounter;
+
+        // Rapid aimed fire
+        if ((cc & 15) === 0) {
+            ws.fireEnemyAimed(e.x + 8, e.y + 12, player, 1, "bubble", 2.2);
+        }
+
+        // Spread bursts every 32 frames
+        if ((cc & 31) === 0) {
+            const fakeL = { x: player.x - 20, y: player.y };
+            const fakeR = { x: player.x + 20, y: player.y };
+            ws.fireEnemyAimed(e.x + 8, e.y + 12, fakeL, 1, "bubble", 1.6);
+            ws.fireEnemyAimed(e.x + 8, e.y + 12, fakeR, 1, "bubble", 1.6);
+        }
+
+        // Bombs
+        if ((cc % 29) === 0) {
+            ws.fireEnemyBomb(e.x + 4, e.y, 1, player);
+        }
+
+        // Guided missiles
+        if ((cc % 47) === 0) {
+            ws.fireEnemyGuided(e.x + 4, e.y + 8, player);
         }
     }
 
@@ -1000,43 +1294,76 @@ class EnemyManager {
     }
 
     // ─── MEGABOSS GUARD WHEELS ─────────────────────────────────
+    // Enhanced: fire during all movement phases, more aggressive in later boss phases
 
     _mbwSpin(e) {
         e.animFrame = (e.animFrame + 1) % WHEEL_IMAGES.length;
         e.spriteName = WHEEL_IMAGES[e.animFrame];
     }
 
-    _aiMbwAscend(e, ws) {
+    _mbwGetBossPhase() {
+        // Check if the megaboss center (slot 0) exists and get its phase
+        if (this.enemies.length > 0) {
+            const center = this.enemies[0];
+            if (center.alive && (center.etype === ETYPE_MEGABOSS_C)) {
+                return this._getMegabossPhase(center);
+            }
+        }
+        return 1;
+    }
+
+    _aiMbwAscend(e, player, ws) {
         this._mbwSpin(e);
         e.y -= 2;
+        // Phase 2+: fire while ascending
+        if (this._mbwGetBossPhase() >= 2 && (this.cycleCounter & 31) === 0 && player) {
+            ws.fireEnemyAimed(e.x + 7, e.y + 10, player, 1, "bubble", 1.5);
+        }
         if (e.y <= 1) {
             e.etype = ETYPE_MBW_SLIDE;
         }
     }
 
-    _aiMbwSlide(e, ws) {
+    _aiMbwSlide(e, player, ws) {
         this._mbwSpin(e);
-        e.x += e.data;
+        const bossPhase = this._mbwGetBossPhase();
+        // Phase 3: faster slide
+        const slideSpeed = bossPhase === 3 ? 2 : 1;
+        e.x += e.data * slideSpeed;
+        // Fire while sliding in Phase 2+
+        if (bossPhase >= 2 && (this.cycleCounter & 15) === 0 && player) {
+            ws.fireEnemyBomb(e.x + 4, e.y, 1, player);
+        }
         if (e.x <= 1 || e.x >= 145) {
             e.etype = ETYPE_MBW_DESCEND;
         }
     }
 
-    _aiMbwDescend(e, ws) {
+    _aiMbwDescend(e, player, ws) {
         this._mbwSpin(e);
-        e.y += 1;
+        const bossPhase = this._mbwGetBossPhase();
+        e.y += bossPhase === 3 ? 2 : 1;
+        // Fire while descending in Phase 2+
+        if (bossPhase >= 2 && (this.cycleCounter & 23) === 0 && player) {
+            ws.fireEnemyAimed(e.x + 7, e.y + 10, player, 1, "bubble", 1.8);
+        }
         if (e.y >= 50) {
             e.etype = ETYPE_MBW_DEFEND;
         }
     }
 
-    _aiMbwDefend(e, ws) {
+    _aiMbwDefend(e, player, ws) {
         this._mbwSpin(e);
-        if (((this.cycleCounter + 1) & 63) === 0) {
-            const player = ws._getPlayerRef ? ws._getPlayerRef() : null;
-            if (player) {
-                ws.fireEnemyAimed(e.x + 4, 54, player);
-            }
+        if (!player) return;
+        const bossPhase = this._mbwGetBossPhase();
+        // Fire rate scales with boss phase: 48/32/16 frames
+        const fireRate = bossPhase === 3 ? 15 : (bossPhase === 2 ? 31 : 47);
+        if (((this.cycleCounter + 1) & fireRate) === 0) {
+            ws.fireEnemyAimed(e.x + 7, e.y + 10, player, 1, "bubble", 2.0);
+        }
+        // Phase 3: also fire bombs downward
+        if (bossPhase === 3 && (this.cycleCounter % 37) === 0) {
+            ws.fireEnemyBomb(e.x + 4, e.y, 1, player);
         }
     }
 
@@ -1084,47 +1411,103 @@ class EnemyManager {
         }
     }
 
+    // ─── ECONOMIC MODEL ──────────────────────────────────────────
+    // All tunable values are in economy.js — edit that file to adjust.
+    // See economy.js for target income, difficulty modifiers, and boss loot tables.
+
+    _getLevelCashValue() {
+        // Base drop value scales with level — values from economy.js
+        const vals = ECONOMY.levelCashValues;
+        const idx = Math.min(this.currentLevel, vals.length - 1);
+        return vals[idx];
+    }
+
+    _getCashDropChance() {
+        // Drop rate: 1 in N kills. Difficulty-scaled via economy.js
+        const baseDenom = ECONOMY.cashDropBaseDenom;
+        const diffMod = ECONOMY.diffDropRateMod[this.difficulty] || 0;
+        return Math.max(ECONOMY.cashDropMinDenom, baseDenom + diffMod);
+    }
+
+    _getBossDropValue() {
+        // Boss drops: roll against level-tiered loot table from economy.js
+        const level = this.currentLevel;
+        const roll = Math.floor(Math.random() * 10);
+
+        // Find the right tier
+        const tables = ECONOMY.bossDropTables;
+        let table;
+        if (level <= tables.early.maxLevel) {
+            table = tables.early.table;
+        } else if (level <= tables.mid.maxLevel) {
+            table = tables.mid.table;
+        } else {
+            table = tables.late.table;
+        }
+
+        // Roll against cumulative thresholds
+        let base = table[table.length - 1][1];  // fallback to last entry
+        for (const [threshold, value] of table) {
+            if (roll < threshold) {
+                base = value;
+                break;
+            }
+        }
+
+        // Difficulty modifier on boss drops
+        const diffMult = ECONOMY.diffBossDropMult[this.difficulty] || 1.0;
+        return Math.floor(base * diffMult);
+    }
+
     _explosionFinished(e, ws) {
-        // Small enemy cash drop: 1/4 chance for $50 (matches Python desktop version)
-        if (ws && Math.floor(Math.random() * 4) === 0) {
-            ws.deployCash(e.x, e.y, 50);
+        // Guard: prevent any enemy from dropping cash more than once
+        if (e._cashDropped) {
+            e.alive = false;
+            this.enemiesRemaining -= 1;
+            return;
+        }
+        e._cashDropped = true;
+
+        // Small enemy cash drop: level-scaled value, difficulty-scaled chance
+        const dropDenom = this._getCashDropChance();
+        if (ws && Math.floor(Math.random() * dropDenom) === 0) {
+            ws.deployCash(e.x, e.y, this._getLevelCashValue());
         }
         e.alive = false;
         this.enemiesRemaining -= 1;
         this.killCount += 1;
-        this.scorePoints += 10;  // +10 per small enemy kill
+        this.scorePoints += ECONOMY.pointsPerSmallKill;
     }
 
     _largeExplosionFinished(e, ws) {
+        // Guard: prevent any enemy from dropping cash more than once
+        if (e._cashDropped) {
+            e.alive = false;
+            this.enemiesRemaining -= 1;
+            return;
+        }
+        e._cashDropped = true;
+
         if (ws === null) {
             e.alive = false;
             this.enemiesRemaining -= 1;
             this.killCount += 1;
-            this.scorePoints += 10;
+            this.scorePoints += ECONOMY.pointsPerSmallKill;
             return;
         }
 
         if (e.destruct === EDESTRUCT_BOSS || e.destruct === EDESTRUCT_MBC) {
-            // Boss enemy: always drops cash with random variation
-            const roll = Math.floor(Math.random() * 10);
-            let value;
-            if (roll < 3) {
-                value = 50;   // 30% chance: low drop
-            } else if (roll < 7) {
-                value = 200;  // 40% chance: medium drop
-            } else if (roll < 9) {
-                value = 500;  // 20% chance: high drop
-            } else {
-                value = 1000; // 10% chance: jackpot
-            }
+            // Boss: always drops cash, value scales with level
+            const value = this._getBossDropValue();
             ws.deployCash(e.x, e.y, value);
-            this.scorePoints += 50;  // +50 per boss kill
+            this.scorePoints += ECONOMY.pointsPerBossKill;
         } else {
-            // Non-boss large explosion: 1/4 chance for $50 (matches Python desktop)
-            if (Math.floor(Math.random() * 4) === 0) {
-                ws.deployCash(e.x, e.y, 50);
+            // Non-boss large: same as small enemies
+            const dropDenom = this._getCashDropChance();
+            if (Math.floor(Math.random() * dropDenom) === 0) {
+                ws.deployCash(e.x, e.y, this._getLevelCashValue());
             }
-            this.scorePoints += 10;  // +10 per non-boss large kill
+            this.scorePoints += ECONOMY.pointsPerSmallKill;
         }
 
         e.alive = false;
