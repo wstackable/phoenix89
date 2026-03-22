@@ -75,12 +75,12 @@ const MAX_CASH = ECONOMY.maxCash;
 
 // Player ship definitions: (width, height, armor, weapon_x_offset, speed)
 const SHIP_DEFS = {
-    [SHIP_SIGMA]: { width: 13, height: 8, armor: 0, weapon_x: 6, speed: 2 },
-    [SHIP_HEAVY_DESTROYER]: { width: 15, height: 8, armor: 5, weapon_x: 7, speed: 2 },
-    [SHIP_PHOENIX]: { width: 11, height: 7, armor: 0, weapon_x: 5, speed: 3 },
-    [SHIP_PURPLE_DEVIL]: { width: 19, height: 9, armor: 0, weapon_x: 9, speed: 3 },
-    [SHIP_DOUBLE_BLASTERY]: { width: 17, height: 8, armor: 0, weapon_x: 8, speed: 2 },
-    [SHIP_RED_BOMBER]: { width: 13, height: 8, armor: 0, weapon_x: 6, speed: 2 },
+    [SHIP_SIGMA]: { width: 13, height: 8, armor: 0, weapon_x: 6, speed: 2, damageMult: 1.0 },
+    [SHIP_HEAVY_DESTROYER]: { width: 15, height: 8, armor: 5, weapon_x: 7, speed: 2, damageMult: 1.0 },
+    [SHIP_PHOENIX]: { width: 11, height: 7, armor: 0, weapon_x: 5, speed: 4, damageMult: 1.25 },
+    [SHIP_PURPLE_DEVIL]: { width: 19, height: 9, armor: 0, weapon_x: 9, speed: 3, damageMult: 1.0 },
+    [SHIP_DOUBLE_BLASTERY]: { width: 17, height: 8, armor: 0, weapon_x: 8, speed: 2, damageMult: 1.0 },
+    [SHIP_RED_BOMBER]: { width: 13, height: 8, armor: 0, weapon_x: 6, speed: 2, damageMult: 1.0 },
 };
 
 // Fire delays (frames between auto-fire shots at 30fps logic rate)

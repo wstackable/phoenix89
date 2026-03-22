@@ -936,19 +936,20 @@ class LevelManager {
     }
 
     // Final score calculation with breakdown
+    // Simple formula: (kill points + cash bonus) × difficulty multiplier
     calculateScore(player, enemyMgr) {
         if (player.cheated) {
-            return { killScore: 0, timeBonus: 0, shieldBonus: 0, cashBonus: 0, subtotal: 0, multiplier: 1, total: 0 };
+            return { killCount: 0, killScore: 0, cashBonus: 0, subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0 };
         }
 
+        const killCount = enemyMgr ? enemyMgr.killCount : 0;
         const killScore = enemyMgr ? enemyMgr.scorePoints : 0;
-        const timeBonus = Math.max(0, this.timeBonusCounter);
-        const shieldBonus = player.shield * 100;
         const cashBonus = Math.floor(player.cash / 10);
-        const subtotal = killScore + timeBonus + shieldBonus + cashBonus;
+        const subtotal = killScore + cashBonus;
         const multiplier = this.getDifficultyMultiplier();
+        const diffName = this.getDifficultyName();
         const total = Math.floor(subtotal * multiplier);
 
-        return { killScore, timeBonus, shieldBonus, cashBonus, subtotal, multiplier, total };
+        return { killCount, killScore, cashBonus, subtotal, multiplier, diffName, total };
     }
 }

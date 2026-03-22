@@ -21,7 +21,7 @@ class Player {
         this.fireDelayRapid = 1;   // ~10 shots/sec
         this.fireCooldown = 0;
         this.cash = 0;
-        this.numBullets = INITIAL_BULLETS;
+        this.numBullets = MAX_BULLETS;  // Fixed cap — no longer upgradeable
         this.specialWeaponDelay = 0;
         this.hasHomingMissiles = false;
         this.bombs = INITIAL_BOMBS;
@@ -71,6 +71,7 @@ class Player {
         this.armor = defs.armor;
         this.weaponXOffset = defs.weapon_x;
         this.speed = defs.speed;
+        this.damageMult = defs.damageMult || 1.0;
 
         const shipSprites = {
             [SHIP_SIGMA]: "player_sigma",

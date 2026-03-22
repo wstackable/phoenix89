@@ -372,7 +372,14 @@ class SoundManager {
         }
 
         try {
-            this.musicAudio = new Audio(src);
+            // Reuse preloaded Audio element for menu music (already buffered)
+            if (type === 'menu' && this._preloadedMenu) {
+                this.musicAudio = this._preloadedMenu;
+                this._preloadedMenu = null;  // only reuse once
+                this.musicAudio.currentTime = 0;
+            } else {
+                this.musicAudio = new Audio(src);
+            }
             this.musicAudio.volume = 0.4;
             if (type === 'menu') {
                 this.musicAudio.loop = true;
@@ -475,6 +482,16 @@ class SoundManager {
             const j = Math.floor(Math.random() * (i + 1));
             [this.gameplayTracks[i], this.gameplayTracks[j]] = [this.gameplayTracks[j], this.gameplayTracks[i]];
             [this.gameplayTrackNames[i], this.gameplayTrackNames[j]] = [this.gameplayTrackNames[j], this.gameplayTrackNames[i]];
+        }
+
+        // Preload menu music so it's cached and plays instantly on first interaction.
+        // We create a hidden Audio element with preload="auto" — the browser will
+        // start downloading the file immediately, even before the user interacts.
+        if (this.menuMusicFile) {
+            this._preloadedMenu = new Audio(this.menuMusicFile);
+            this._preloadedMenu.preload = 'auto';
+            this._preloadedMenu.volume = 0;  // silent — just for caching
+            this._preloadedMenu.load();       // explicitly start buffering
         }
     }
 }

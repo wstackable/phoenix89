@@ -1456,6 +1456,7 @@ function getCustomSprite(name) {
         "swarm_drone": [SWARM_DRONE_MAP, SWARM_DRONE_COLORS],
         "slime_glob": [SLIME_GLOB_MAP, SLIME_GLOB_COLORS],
         "dragon": [DRAGON_MAP, DRAGON_COLORS],
+        "player_phoenix": [GOLD_PHOENIX_MAP, GOLD_PHOENIX_COLORS],
     };
 
     if (name in spriteDefs) {
@@ -1467,10 +1468,29 @@ function getCustomSprite(name) {
     return null;
 }
 
+// ─── Gold Phoenix Sprite ──────────────────────────────────────
+// Radiating gold look — amber edges, gold body, white-hot energy core
+const GOLD_PHOENIX_MAP = [
+    ".....3.....",
+    "2...1.1...2",
+    "2..1...1..2",
+    "1111...1111",
+    "1111.3.1111",
+    "2..1...1..2",
+    "2..13331..2",
+];
+
+const GOLD_PHOENIX_COLORS = [
+    [255, 210, 50],    // 1: bright gold — main body
+    [200, 150, 20],    // 2: deep amber — wing edges
+    [255, 250, 180],   // 3: white-hot glow — energy core
+];
+
 // Set of sprite names that are custom multi-color (bypass theme coloring)
 const CUSTOM_SPRITE_NAMES = new Set([
     "player_purple_devil", "player_purple_devil_open",
     "player_double_blastery", "player_red_bomber",
+    "player_phoenix",
     "drone", "swarm_drone", "slime_glob", "dragon",
 ]);
 

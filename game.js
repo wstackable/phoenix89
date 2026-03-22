@@ -15,6 +15,7 @@ const STATE_FEEDBACK = "feedback";
 const STATE_PAUSED = "paused";
 const STATE_DEATH_ANIM = "death_anim";
 const STATE_SECRET_HANGAR = "secret_hangar";
+const STATE_CHANGELOG = "changelog";
 
 // ─── Star Field Background ─────────────────────────────────
 
@@ -458,6 +459,7 @@ class Game {
         this.scoreScreen = new ScoreScreen();
         this.aboutScreen = new AboutScreen();
         this.instructionsScreen = new InstructionsScreen();
+        this.changeLogScreen = new ChangeLogScreen();
         this.feedbackScreen = new FeedbackScreen();
         this.secretHangar = new SecretHangar();
 
@@ -584,6 +586,9 @@ class Game {
             } else if (action === "instructions") {
                 this.instructionsScreen.show();
                 this.state = STATE_INSTRUCTIONS;
+            } else if (action === "changelog") {
+                this.changeLogScreen.show();
+                this.state = STATE_CHANGELOG;
             } else if (action === "feedback") {
                 this.feedbackScreen.show(undefined, undefined, false);
                 this.state = STATE_FEEDBACK;
@@ -667,6 +672,11 @@ class Game {
             if (done) {
                 this._returnToTitle();
             }
+        } else if (this.state === STATE_CHANGELOG) {
+            const done = this.changeLogScreen.handleEvent(event);
+            if (done) {
+                this._returnToTitle();
+            }
         } else if (this.state === STATE_DEATH_ANIM) {
             // Allow skipping after 1 second
             if (this.deathAnimTimer > 30) {
@@ -703,8 +713,8 @@ class Game {
                 this.sound.play("explosion_large");
             }
             // Elise's mega could go here in the future
-        } else if (key === 'Shift' && event.location === 2) {
-            // Right Shift: bomb for ALL ships
+        } else if (key === 'Shift') {
+            // Either Shift key: bomb for ALL ships
             if (this.player.bombs > 0 && !this.bombWaveActive) {
                 this.player.bombs--;
                 this.bombWaveActive = true;
@@ -1138,9 +1148,6 @@ class Game {
         this.borders.update();
         this.spaceBg.update();
 
-        // Tick time bonus
-        this.levelMgr.tickTimeBonus();
-
         // Check player death
         if (!this.player.alive) {
             this._gameOver();
@@ -1356,6 +1363,8 @@ class Game {
             this.aboutScreen.draw(ctx);
         } else if (this.state === STATE_INSTRUCTIONS) {
             this.instructionsScreen.draw(ctx);
+        } else if (this.state === STATE_CHANGELOG) {
+            this.changeLogScreen.draw(ctx);
         } else if (this.state === STATE_FEEDBACK) {
             this.feedbackScreen.draw(ctx);
         } else if (this.state === STATE_SCORE) {

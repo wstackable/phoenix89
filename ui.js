@@ -17,7 +17,7 @@ class HUD {
         if (window.soundManager && window.soundManager.musicEnabled) {
             const trackName = window.soundManager.getTrackName();
             if (trackName && trackName !== "No Music") {
-                const radioText = `R: ${trackName}`;
+                const radioText = `♪ ${trackName}`;
                 const radioFontSize = Math.floor(11 * SCALE / 4);
                 ctx.font = `${radioFontSize}px monospace`;
                 const textWidth = ctx.measureText(radioText).width;
@@ -127,7 +127,7 @@ class HUD {
         const levelNum = levelMgr.currentLevelGroup + 1;
         const waveNum = levelMgr.waveInLevel > 0 ? levelMgr.waveInLevel : 1;
         const score = levelMgr.getRunningScore(player, enemyMgr);
-        const status = `$${player.cash.toString().padStart(5, '0')}  HP:${player.shield.toString().padStart(2, '0')}  L${levelNum}-W${waveNum}  Gun:${player.weaponSelected + 1}  B:${player.bombs}  S:${score}`;
+        const status = `$${player.cash.toString().padStart(5, '0')}  HP:${player.shield.toString().padStart(2, '0')}  L${levelNum}-W${waveNum}  Gun:${player.weaponSelected + 1}  B:${player.bombs}  Score:${score}`;
 
         ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
         ctx.font = `${Math.floor(13 * SCALE / 4)}px monospace`;
@@ -188,23 +188,36 @@ class Shop {
 
     _isOwned(player, idx) {
         switch (idx) {
-            case 3: return !!(player.weaponsAvailable & (1 << WEAPON_DOUBLE));
-            case 4: return !!(player.weaponsAvailable & (1 << WEAPON_TRIPLE));
-            case 5: return !!(player.weaponsAvailable & (1 << WEAPON_QUAD));
-            case 6: return player.fireDelay <= FIRE_DELAY_RAPID;
-            case 7: return player.hasHomingMissiles;
-            case 8: return !!(player.weaponsAvailable & (1 << WEAPON_DUAL_PLASMA));
-            case 9: return player.shipType >= SHIP_HEAVY_DESTROYER;
-            case 10: return !!(player.weaponsAvailable & (1 << WEAPON_GOLDEN_ARCHES));
-            case 11: return player.shipType >= SHIP_PHOENIX;
-            case 12: return !!(player.weaponsAvailable & (1 << WEAPON_TRIPLE_PLASMA));
-            case 13: return !!(player.weaponsAvailable & (1 << WEAPON_DELUXE_PLASMA));
+            case 2: return !!(player.weaponsAvailable & (1 << WEAPON_DOUBLE));
+            case 3: return !!(player.weaponsAvailable & (1 << WEAPON_TRIPLE));
+            case 4: return !!(player.weaponsAvailable & (1 << WEAPON_QUAD));
+            case 5: return player.fireDelay <= FIRE_DELAY_RAPID;
+            case 6: return player.hasHomingMissiles;
+            case 7: return !!(player.weaponsAvailable & (1 << WEAPON_DUAL_PLASMA));
+            case 8: return player.shipType >= SHIP_HEAVY_DESTROYER;
+            case 9: return !!(player.weaponsAvailable & (1 << WEAPON_GOLDEN_ARCHES));
+            case 10: return player.shipType >= SHIP_PHOENIX;
+            case 11: return !!(player.weaponsAvailable & (1 << WEAPON_TRIPLE_PLASMA));
+            case 12: return !!(player.weaponsAvailable & (1 << WEAPON_DELUXE_PLASMA));
             default: return false;
         }
     }
 
     _applyPurchase(player, idx) {
-        if (this._isOwned(player, idx) && idx > 2 && idx < 14) return false;
+        // Ships: if already owned, pressing Enter switches to that ship (free)
+        if (idx === 8 && this._isOwned(player, 8)) {
+            player.shipType = SHIP_HEAVY_DESTROYER;
+            player.loadShip();
+            return true;  // play "buy" sound as confirmation
+        }
+        if (idx === 10 && this._isOwned(player, 10)) {
+            player.shipType = SHIP_PHOENIX;
+            player.loadShip();
+            return true;
+        }
+
+        // Non-ship items: block if already owned
+        if (this._isOwned(player, idx) && idx > 1 && idx < 13) return false;
 
         switch (idx) {
             case 0: return true; // Exit
@@ -212,55 +225,49 @@ class Shop {
                 if (player.shield >= MAX_SHIELD) return false;
                 player.shield = Math.min(player.shield + 1, MAX_SHIELD);
                 return true;
-            case 2: // Extra bullet
-                if (player.numBullets >= MAX_BULLETS) return false;
-                player.numBullets++;
-                return true;
-            case 3: // Double cannon
+            case 2: // Double cannon
                 player.weaponsAvailable |= (1 << WEAPON_DOUBLE);
                 player.weaponSelected = WEAPON_DOUBLE;
                 return true;
-            case 4: // Triple cannon
+            case 3: // Triple cannon
                 player.weaponsAvailable |= (1 << WEAPON_TRIPLE);
                 player.weaponSelected = WEAPON_TRIPLE;
                 return true;
-            case 5: // Quad cannon
+            case 4: // Quad cannon
                 player.weaponsAvailable |= (1 << WEAPON_QUAD);
                 player.weaponSelected = WEAPON_QUAD;
                 return true;
-            case 6: // Rapid fire
+            case 5: // Rapid fire
                 player.fireDelay = FIRE_DELAY_RAPID;
                 return true;
-            case 7: // Homing missiles
+            case 6: // Homing missiles
                 player.hasHomingMissiles = true;
                 return true;
-            case 8: // Dual plasma
+            case 7: // Dual plasma
                 player.weaponsAvailable |= (1 << WEAPON_DUAL_PLASMA);
                 player.weaponSelected = WEAPON_DUAL_PLASMA;
                 return true;
-            case 9: // Heavy Destroyer
-                if (player.shipType >= SHIP_HEAVY_DESTROYER) return false;
+            case 8: // Heavy Destroyer (first purchase)
                 player.shipType = SHIP_HEAVY_DESTROYER;
                 player.loadShip();
                 return true;
-            case 10: // Golden Arches
+            case 9: // Golden Arches
                 player.weaponsAvailable |= (1 << WEAPON_GOLDEN_ARCHES);
                 player.weaponSelected = WEAPON_GOLDEN_ARCHES;
                 return true;
-            case 11: // Phoenix
-                if (player.shipType >= SHIP_PHOENIX) return false;
+            case 10: // Phoenix (first purchase)
                 player.shipType = SHIP_PHOENIX;
                 player.loadShip();
                 return true;
-            case 12: // Triple Plasma
+            case 11: // Triple Plasma
                 player.weaponsAvailable |= (1 << WEAPON_TRIPLE_PLASMA);
                 player.weaponSelected = WEAPON_TRIPLE_PLASMA;
                 return true;
-            case 13: // Deluxe Plasma
+            case 12: // Deluxe Plasma
                 player.weaponsAvailable |= (1 << WEAPON_DELUXE_PLASMA);
                 player.weaponSelected = WEAPON_DELUXE_PLASMA;
                 return true;
-            case 14: // Bombs
+            case 13: // Bombs
                 if (player.bombs >= MAX_BOMBS) return false;
                 player.bombs = Math.min(player.bombs + 3, MAX_BOMBS);
                 return true;
@@ -325,7 +332,7 @@ class Shop {
                 [SHIP_PHOENIX]: "The Phoenix", [SHIP_PURPLE_DEVIL]: "Purple Devil",
                 [SHIP_DOUBLE_BLASTERY]: "Double Blastery", [SHIP_RED_BOMBER]: "Red Bomber"
             };
-            const shipInfo = `Ship: ${shipNames[player.shipType] || '?'} | Bullets: ${player.numBullets}/${MAX_BULLETS} | Shield: ${player.shield}/${MAX_SHIELD} | Bombs: ${player.bombs}/${MAX_BOMBS}`;
+            const shipInfo = `Ship: ${shipNames[player.shipType] || '?'} | Shield: ${player.shield}/${MAX_SHIELD} | Bombs: ${player.bombs}/${MAX_BOMBS}`;
             ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
             ctx.fillText(shipInfo, 2 * SCALE, SCREEN_HEIGHT - 6 * SCALE);
         }
@@ -395,13 +402,13 @@ class TitleScreen {
         // Left/Right for level select on Level Select row (now index 1, unchanged)
 
         // Menu navigation
-        const numItems = 6;
+        const numItems = 7;
         if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
             this.selected = (this.selected - 1 + numItems) % numItems;
         } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
             this.selected = (this.selected + 1) % numItems;
         } else if (event.key === 'Enter' || event.key === ' ') {
-            const actions = ["new_game", "level_select", "instructions", "high_scores", "feedback", "about"];
+            const actions = ["new_game", "level_select", "instructions", "high_scores", "changelog", "feedback", "about"];
             return actions[this.selected] || null;
         }
         return null;
@@ -430,7 +437,7 @@ class TitleScreen {
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
         // Menu items
-        const menuItems = ["New Game", "Level Select", "Instructions", "High Scores", "Suggestions / Bugs", "About"];
+        const menuItems = ["New Game", "Level Select", "Instructions", "High Scores", "Versions - What We Did", "Suggestions / Bugs", "About"];
         const menuFontSize = Math.floor(14 * SCALE / 4);
         ctx.font = `${menuFontSize}px monospace`;
         ctx.textBaseline = 'top';
@@ -511,13 +518,14 @@ class AboutScreen {
             "by Patrick Davidson (~1998)",
             "A legendary space shooter written",
             "in 68000 assembly for a 160x100",
-            "LCD in > 30kb. Insane.",
+            "LCD on a TI-89 calculator.",
+            "All in > 16kb memory. Insane.",
             "My favorite game to play in AP Calc.",
             "",
-            "OUR CODEBASE: ~9000 lines of JS",
-            "9 modules / procedural audio",
+            "OUR CODEBASE: ~9700 lines of JS",
+            "11 modules / procedural audio",
             "35+ enemy types / 11 weapons",
-            "Built entirely with Claude Code",
+            "Built with Claude Code",
             "",
             "Will Stackable, March 2026",
             "",
@@ -540,6 +548,168 @@ class AboutScreen {
         const prompt = "Press any key to return";
         const promptMetrics = ctx.measureText(prompt);
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 6 * SCALE);
+    }
+}
+
+// ─── Change Log Screen Class ────────────────────────────────
+
+class ChangeLogScreen {
+    constructor() {
+        this.active = false;
+        this.scrollY = 0;
+        this.maxScroll = 0;
+        this._lines = [];       // pre-built line objects for rendering
+    }
+
+    show() {
+        this.active = true;
+        this.scrollY = 0;
+        this._buildLines();
+    }
+
+    /**
+     * Pre-build all display lines from CHANGELOG data so draw() is simple.
+     * Each line: { text, style, indent }
+     *   style: "version" | "date" | "change" | "blank"
+     */
+    _buildLines() {
+        this._lines = [];
+        for (let i = 0; i < CHANGELOG.length; i++) {
+            const entry = CHANGELOG[i];
+            if (i > 0) this._lines.push({ text: "", style: "blank" });
+            this._lines.push({ text: `v${entry.version}`, style: "version" });
+            this._lines.push({ text: entry.date, style: "date" });
+            for (const change of entry.changes) {
+                this._lines.push({ text: `- ${change}`, style: "change" });
+            }
+        }
+        // Calculate max scroll (total content height minus visible area)
+        const lineH = 4.5 * SCALE;
+        const blankH = 2.5 * SCALE;
+        const versionH = 6 * SCALE;
+        let totalH = 0;
+        for (const line of this._lines) {
+            if (line.style === "blank") totalH += blankH;
+            else if (line.style === "version") totalH += versionH;
+            else totalH += lineH;
+        }
+        const headerH = 14 * SCALE;   // space for title + scroll hint
+        const footerH = 8 * SCALE;    // space for bottom prompt
+        const viewH = SCREEN_HEIGHT - headerH - footerH;
+        this.maxScroll = Math.max(0, totalH - viewH);
+    }
+
+    handleEvent(event) {
+        if (event.type !== 'keydown') return false;
+
+        if (event.key === 'Escape' || event.key === 'Enter') {
+            this.active = false;
+            return true;
+        }
+
+        const scrollStep = 5 * SCALE;
+        const pageStep = 20 * SCALE;
+
+        if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
+            this.scrollY = Math.min(this.maxScroll, this.scrollY + scrollStep);
+        } else if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
+            this.scrollY = Math.max(0, this.scrollY - scrollStep);
+        } else if (event.key === ' ') {
+            // Space = page down
+            this.scrollY = Math.min(this.maxScroll, this.scrollY + pageStep);
+        }
+
+        return false;
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        const fg = COLOR_FG;
+
+        // Title
+        ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
+        ctx.font = `${Math.floor(20 * SCALE / 4)}px monospace`;
+        const title = "CHANGE LOG";
+        const titleMetrics = ctx.measureText(title);
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 4 * SCALE);
+
+        // Scroll hint
+        ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = 'rgba(180, 180, 200, 0.6)';
+        const hint = "Arrow keys to scroll / Space to page down";
+        const hintMetrics = ctx.measureText(hint);
+        ctx.fillText(hint, SCREEN_WIDTH / 2 - hintMetrics.width / 2, 8 * SCALE);
+
+        // Clipping region for scrollable content
+        const clipTop = 11 * SCALE;
+        const clipBottom = SCREEN_HEIGHT - 7 * SCALE;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, clipTop, SCREEN_WIDTH, clipBottom - clipTop);
+        ctx.clip();
+
+        // Draw changelog lines
+        const lineH = 4.5 * SCALE;
+        const blankH = 2.5 * SCALE;
+        const versionH = 6 * SCALE;
+        let y = clipTop + 2 * SCALE - this.scrollY;
+
+        const versionFont = `bold ${Math.floor(14 * SCALE / 4)}px monospace`;
+        const dateFont = `${Math.floor(9 * SCALE / 4)}px monospace`;
+        const changeFont = `${Math.floor(10 * SCALE / 4)}px monospace`;
+
+        for (const line of this._lines) {
+            let h;
+            if (line.style === "blank") {
+                h = blankH;
+            } else if (line.style === "version") {
+                h = versionH;
+                if (y + h > clipTop - h && y < clipBottom + h) {
+                    ctx.font = versionFont;
+                    ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
+                    ctx.fillText(line.text, 5 * SCALE, y + versionH * 0.7);
+                }
+            } else if (line.style === "date") {
+                h = lineH;
+                if (y + h > clipTop - h && y < clipBottom + h) {
+                    ctx.font = dateFont;
+                    ctx.fillStyle = 'rgba(160, 170, 200, 0.7)';
+                    ctx.fillText(line.text, 5 * SCALE, y + lineH * 0.7);
+                }
+            } else {
+                h = lineH;
+                if (y + h > clipTop - h && y < clipBottom + h) {
+                    ctx.font = changeFont;
+                    ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
+                    ctx.fillText(line.text, 7 * SCALE, y + lineH * 0.7);
+                }
+            }
+            y += h;
+        }
+
+        ctx.restore();
+
+        // Scroll position indicator (thin bar on right edge)
+        if (this.maxScroll > 0) {
+            const trackTop = clipTop;
+            const trackH = clipBottom - clipTop;
+            const thumbH = Math.max(10, trackH * (trackH / (trackH + this.maxScroll)));
+            const thumbY = trackTop + (this.scrollY / this.maxScroll) * (trackH - thumbH);
+
+            ctx.fillStyle = 'rgba(100, 100, 130, 0.3)';
+            ctx.fillRect(SCREEN_WIDTH - 3 * SCALE, trackTop, 2 * SCALE, trackH);
+            ctx.fillStyle = 'rgba(180, 180, 220, 0.5)';
+            ctx.fillRect(SCREEN_WIDTH - 3 * SCALE, thumbY, 2 * SCALE, thumbH);
+        }
+
+        // Bottom prompt
+        ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
+        ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+        const prompt = "Press ESC to return";
+        const promptMetrics = ctx.measureText(prompt);
+        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
     }
 }
 
@@ -1073,16 +1243,12 @@ class ScoreScreen {
 
         if (cheated) {
             this.scoreData = {
-                killScore: 0, timeBonus: 0, shieldBonus: 0, cashBonus: 0,
+                killCount: 0, killScore: 0, cashBonus: 0,
                 subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0, cheated: true,
             };
         } else {
             const result = levelMgr.calculateScore(player, enemyMgr);
-            this.scoreData = {
-                ...result,
-                diffName: levelMgr.getDifficultyName(),
-                cheated: false,
-            };
+            this.scoreData = { ...result, cheated: false };
         }
         return this.scoreData.total;
     }
@@ -1113,30 +1279,53 @@ class ScoreScreen {
             const cheatMetrics = ctx.measureText(cheatText);
             ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatMetrics.width / 2, 40 * SCALE);
         } else {
-            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            let y = 20 * SCALE;
             const d = this.scoreData;
-            const items = [
-                ["Kills & Waves:", d.killScore],
-                ["Time Bonus:", d.timeBonus],
-                ["Shield Bonus:", d.shieldBonus],
-                ["Cash Bonus:", d.cashBonus],
-                ["", ""],
-                ["Subtotal:", d.subtotal],
-                [`${d.diffName} (x${d.multiplier}):`, ""],
-                ["TOTAL SCORE:", d.total],
-            ];
+            const fontSize = Math.floor(14 * SCALE / 4);
+            ctx.font = `${fontSize}px monospace`;
+            let y = 22 * SCALE;
+            const lineH = 7 * SCALE;
 
-            for (const [label, value] of items) {
-                if (label === "" && value === "") {
-                    y += 3 * SCALE;
-                    continue;
-                }
-                const valStr = value !== "" ? value.toString().padStart(8, ' ') : "";
-                const line = `${label.padEnd(22, ' ')} ${valStr}`;
-                ctx.fillText(line, SCREEN_WIDTH / 4, y);
-                y += 6 * SCALE;
-            }
+            // Enemies Destroyed (display count + point value)
+            const killLabel = `Enemies Destroyed:`;
+            const killVal = `${d.killCount} (${d.killScore} pts)`;
+            ctx.fillText(killLabel, SCREEN_WIDTH / 4, y);
+            y += lineH;
+            ctx.fillStyle = 'rgba(180, 220, 255, 0.85)';
+            const killValMetrics = ctx.measureText(killVal);
+            ctx.fillText(killVal, SCREEN_WIDTH / 2 - killValMetrics.width / 2, y);
+            y += lineH + 2 * SCALE;
+
+            // Cash Bonus
+            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.fillText(`Cash Bonus:`, SCREEN_WIDTH / 4, y);
+            y += lineH;
+            ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
+            const cashStr = `$${(d.cashBonus * 10).toLocaleString()} remaining = ${d.cashBonus} pts`;
+            const cashMetrics = ctx.measureText(cashStr);
+            ctx.fillText(cashStr, SCREEN_WIDTH / 2 - cashMetrics.width / 2, y);
+            y += lineH + 4 * SCALE;
+
+            // Divider
+            ctx.fillStyle = 'rgba(120, 120, 150, 0.4)';
+            ctx.fillRect(SCREEN_WIDTH / 4, y - 2 * SCALE, SCREEN_WIDTH / 2, 1);
+            y += 2 * SCALE;
+
+            // Subtotal
+            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            const subLine = `Subtotal: ${d.subtotal}`;
+            ctx.fillText(subLine, SCREEN_WIDTH / 4, y);
+            y += lineH;
+
+            // Difficulty multiplier
+            const diffLine = `${d.diffName} Multiplier: x${d.multiplier}`;
+            ctx.fillText(diffLine, SCREEN_WIDTH / 4, y);
+            y += lineH + 3 * SCALE;
+
+            // Total (bigger, centered)
+            ctx.font = `bold ${Math.floor(18 * SCALE / 4)}px monospace`;
+            const totalStr = `TOTAL: ${d.total.toLocaleString()}`;
+            const totalMetrics = ctx.measureText(totalStr);
+            ctx.fillText(totalStr, SCREEN_WIDTH / 2 - totalMetrics.width / 2, y);
         }
 
         ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;

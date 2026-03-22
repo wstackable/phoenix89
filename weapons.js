@@ -135,42 +135,42 @@ class WeaponSystem {
 
         const [gx, gy] = player.weaponGunPos();
         const w = player.weaponSelected;
+        const dmgMult = player.damageMult || 1.0;
         player.fire();
+
+        // Helper: apply ship damage multiplier (Phoenix gets 1.25×)
+        const d = (baseDmg) => Math.ceil(baseDmg * dmgMult);
 
         // Weapon fire patterns
         if (w === WEAPON_NORMAL) {
-            this._addBullet(gx - 1, gy - 5, 0, -4, 2, "bullet_standard", 0, 3, 10);
+            this._addBullet(gx - 1, gy - 5, 0, -4, d(2), "bullet_standard", 0, 3, 10);
         } else if (w === WEAPON_DOUBLE) {
-            this._addBullet(gx - 6, gy - 6, 0, -4, 2, "bullet_standard", 0, 3, 10);
-            this._addBullet(gx + 4, gy - 6, 0, -4, 2, "bullet_standard", 0, 3, 10);
+            this._addBullet(gx - 6, gy - 6, 0, -4, d(2), "bullet_standard", 0, 3, 10);
+            this._addBullet(gx + 4, gy - 6, 0, -4, d(2), "bullet_standard", 0, 3, 10);
         } else if (w === WEAPON_TRIPLE) {
-            this._addBullet(gx - 1, gy - 5, 0, -5, 2, "bullet_triple", 0, 4, 4);
-            this._addBullet(gx - 1, gy - 5, -1.5, -4, 2, "bullet_triple", 0, 4, 4);
-            this._addBullet(gx - 1, gy - 5, 1.5, -4, 2, "bullet_triple", 0, 4, 4);
+            this._addBullet(gx - 1, gy - 5, 0, -5, d(2), "bullet_triple", 0, 4, 4);
+            this._addBullet(gx - 1, gy - 5, -1.5, -4, d(2), "bullet_triple", 0, 4, 4);
+            this._addBullet(gx - 1, gy - 5, 1.5, -4, d(2), "bullet_triple", 0, 4, 4);
         } else if (w === WEAPON_QUAD) {
-            this._addBullet(gx - 7, gy - 7, -2, -6, 2, "bullet_quad", 1, 5, 7);
-            this._addBullet(gx - 7, gy - 7, 2, -6, 2, "bullet_quad", 1, 5, 7);
-            this._addBullet(gx + 5, gy - 7, -2, -6, 2, "bullet_quad", 1, 5, 7);
-            this._addBullet(gx + 5, gy - 7, 2, -6, 2, "bullet_quad", 1, 5, 7);
+            this._addBullet(gx - 7, gy - 7, -2, -6, d(2), "bullet_quad", 1, 5, 7);
+            this._addBullet(gx - 7, gy - 7, 2, -6, d(2), "bullet_quad", 1, 5, 7);
+            this._addBullet(gx + 5, gy - 7, -2, -6, d(2), "bullet_quad", 1, 5, 7);
+            this._addBullet(gx + 5, gy - 7, 2, -6, d(2), "bullet_quad", 1, 5, 7);
         } else if (w === WEAPON_DUAL_PLASMA) {
-            // Rebalanced: 8→6 dmg per bolt (12 total, was 16)
-            this._addBullet(gx - 6, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx + 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx - 6, gy - 4, 0, -6, d(6), "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx + 2, gy - 4, 0, -6, d(6), "bullet_plasma", 0, 5, 11);
         } else if (w === WEAPON_GOLDEN_ARCHES) {
-            // Rebalanced: 16→10 dmg per blob (20 total, was 32)
-            this._addBullet(gx + 3, gy + 4, 0.5, 2.5, 10, "bullet_blob", 2, 4, 6);
-            this._addBullet(gx - 3, gy + 4, -0.5, 2.5, 10, "bullet_blob", 2, 4, 6);
+            this._addBullet(gx + 3, gy + 4, 0.5, 2.5, d(10), "bullet_blob", 2, 4, 6);
+            this._addBullet(gx - 3, gy + 4, -0.5, 2.5, d(10), "bullet_blob", 2, 4, 6);
         } else if (w === WEAPON_TRIPLE_PLASMA) {
-            // Rebalanced: 8→6 dmg per bolt (18 total, was 24)
-            this._addBullet(gx - 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx - 6, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
-            this._addBullet(gx + 2, gy - 4, 0, -6, 6, "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx - 2, gy - 4, 0, -6, d(6), "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx - 6, gy - 4, 0, -6, d(6), "bullet_plasma", 0, 5, 11);
+            this._addBullet(gx + 2, gy - 4, 0, -6, d(6), "bullet_plasma", 0, 5, 11);
         } else if (w === WEAPON_DELUXE_PLASMA) {
-            // Rebalanced: 20→12 dmg per bolt (48 total, was 80)
-            this._addBullet(gx - 1, gy - 4, -0.5, -9, 12, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx + 3, gy - 4, 0.5, -9, 12, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx - 3, gy - 4, -2, -9, 12, "bullet_ultimate", 0, 5, 10);
-            this._addBullet(gx + 8, gy - 4, 2, -9, 12, "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx - 1, gy - 4, -0.5, -9, d(12), "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx + 3, gy - 4, 0.5, -9, d(12), "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx - 3, gy - 4, -2, -9, d(12), "bullet_ultimate", 0, 5, 10);
+            this._addBullet(gx + 8, gy - 4, 2, -9, d(12), "bullet_ultimate", 0, 5, 10);
         } else if (w === WEAPON_SNIPER_LASER) {
             // Purple Devil: quad star cannon
             this._addBullet(gx - 7, gy - 7, -2, -6, 3, "bullet_quad", 9, 5, 5);

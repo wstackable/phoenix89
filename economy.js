@@ -96,21 +96,20 @@ const ECONOMY = {
     //   Tier 4 (L7-8, ~$1600/level): Ships, Golden Arches
     //   Tier 5 (L9+,  ~$2000/level): Triple/Deluxe Plasma
     shopItems: [
-        ["Exit the shop!", 0],
-        ["1-point shield recharge", 50],       // Always affordable
-        ["Extra bullet", 100],                 // Always affordable
-        ["Double Cannon (2)", 400],            // Tier 1
-        ["Triple Cannon (3)", 800],            // Tier 2
-        ["Quadruple Cannon (4)", 1200],        // Tier 2
-        ["Rapid-Fire Unit", 2000],             // Tier 3
-        ["Homing Missiles (addon)", 1600],     // Tier 3
-        ["Dual Plasma Cannon (5)", 2500],      // Tier 3
-        ["New Ship: Heavy Destroyer", 3000],   // Tier 4
-        ["Golden Arches (6)", 3500],           // Tier 4
-        ["New Ship: The Phoenix", 4000],       // Tier 4
-        ["Triple Plasma (7)", 5000],           // Tier 5
-        ["Deluxe Plasma (8)", 6500],           // Tier 5
-        ["Bombs x3", 600],                     // Tier 2
+        ["Exit the shop!", 0],                 // idx 0
+        ["1-point shield recharge", 50],       // idx 1 — always affordable
+        ["Double Cannon (2)", 400],            // idx 2 — Tier 1
+        ["Triple Cannon (3)", 800],            // idx 3 — Tier 2
+        ["Quadruple Cannon (4)", 1200],        // idx 4 — Tier 2
+        ["Rapid-Fire Unit", 2000],             // idx 5 — Tier 3
+        ["Homing Missiles (addon)", 1600],     // idx 6 — Tier 3
+        ["Dual Plasma Cannon (5)", 2500],      // idx 7 — Tier 3
+        ["New Ship: Heavy Destroyer (Extra Armor)", 3000], // idx 8 — Tier 4
+        ["Golden Arches (6)", 3500],           // idx 9 — Tier 4
+        ["New Ship: The Phoenix (Fast + Powerful)", 4000],   // idx 10 — Tier 4
+        ["Triple Plasma (7)", 5000],           // idx 11 — Tier 5
+        ["Deluxe Plasma (8)", 6500],           // idx 12 — Tier 5
+        ["Bombs x3", 600],                     // idx 13 — Tier 2
     ],
 
     // ─── WALLET LIMITS ───────────────────────────────────────────
