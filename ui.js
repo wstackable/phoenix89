@@ -1119,7 +1119,8 @@ class HighScoreScreen {
                 this._submitGlobalScore(name, this.newScore, this.difficulty);
                 this.enteringName = false;
                 this.fetchGlobalScores();
-                return true;
+                // Don't return true — show the global leaderboard first
+                return false;
             } else if (event.key === 'Backspace') {
                 this.nameInput = this.nameInput.slice(0, -1);
             } else if (event.key.length === 1 && this.nameInput.length < this.maxNameLen) {
@@ -1623,20 +1624,35 @@ class ScoreScreen {
     }
 
     draw(ctx) {
-        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        // --- Color palette ---
+        const colBg      = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        const colTitle   = '#FFFFFF';
+        const colLabel   = 'rgba(225, 235, 220, 0.9)';   // warm off-white for labels
+        const colValue   = 'rgba(130, 255, 200, 1)';     // mint-green accent for values
+        const colDim     = 'rgba(180, 195, 170, 0.7)';   // muted for secondary info
+        const colTotal   = '#FFFFFF';
+        const colDivider = 'rgba(130, 255, 200, 0.3)';
+
+        ctx.fillStyle = colBg;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
-        ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+        // --- Title ---
+        ctx.save();
+        ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = colTitle;
+        ctx.shadowColor = 'rgba(130, 255, 200, 0.6)';
+        ctx.shadowBlur = 12;
         const title = "GAME OVER";
-        const titleMetrics = ctx.measureText(title);
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 8 * SCALE);
+        const titleW = ctx.measureText(title).width;
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 8 * SCALE);
+        ctx.restore();
 
         if (this.scoreData.cheated) {
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            ctx.fillStyle = colValue;
             const cheatText = "CHEATER - Score: 0";
-            const cheatMetrics = ctx.measureText(cheatText);
-            ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatMetrics.width / 2, 40 * SCALE);
+            const cheatW = ctx.measureText(cheatText).width;
+            ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatW / 2, 40 * SCALE);
         } else {
             const d = this.scoreData;
             const fontSize = Math.floor(14 * SCALE / 4);
@@ -1644,53 +1660,58 @@ class ScoreScreen {
             let y = 22 * SCALE;
             const lineH = 7 * SCALE;
 
-            // Enemies Destroyed (display count + point value)
-            const killLabel = `Enemies Destroyed:`;
-            const killVal = `${d.killCount} (${d.killScore} pts)`;
-            ctx.fillText(killLabel, SCREEN_WIDTH / 4, y);
+            // --- Enemies Destroyed ---
+            ctx.fillStyle = colLabel;
+            ctx.fillText(`Enemies Destroyed:`, SCREEN_WIDTH / 4, y);
             y += lineH;
-            ctx.fillStyle = 'rgba(180, 220, 255, 0.85)';
-            const killValMetrics = ctx.measureText(killVal);
-            ctx.fillText(killVal, SCREEN_WIDTH / 2 - killValMetrics.width / 2, y);
+            ctx.fillStyle = colValue;
+            const killVal = `${d.killCount} (${d.killScore} pts)`;
+            const killW = ctx.measureText(killVal).width;
+            ctx.fillText(killVal, SCREEN_WIDTH / 2 - killW / 2, y);
             y += lineH + 2 * SCALE;
 
-            // Cash Bonus
-            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            // --- Cash Bonus ---
+            ctx.fillStyle = colLabel;
             ctx.fillText(`Cash Bonus:`, SCREEN_WIDTH / 4, y);
             y += lineH;
-            ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
+            ctx.fillStyle = colValue;
             const cashStr = `$${(d.cashBonus * 10).toLocaleString()} remaining = ${d.cashBonus} pts`;
-            const cashMetrics = ctx.measureText(cashStr);
-            ctx.fillText(cashStr, SCREEN_WIDTH / 2 - cashMetrics.width / 2, y);
+            const cashW = ctx.measureText(cashStr).width;
+            ctx.fillText(cashStr, SCREEN_WIDTH / 2 - cashW / 2, y);
             y += lineH + 4 * SCALE;
 
-            // Divider
-            ctx.fillStyle = 'rgba(120, 120, 150, 0.4)';
-            ctx.fillRect(SCREEN_WIDTH / 4, y - 2 * SCALE, SCREEN_WIDTH / 2, 1);
-            y += 2 * SCALE;
+            // --- Divider ---
+            ctx.fillStyle = colDivider;
+            ctx.fillRect(SCREEN_WIDTH / 4, y - 2 * SCALE, SCREEN_WIDTH / 2, 2);
+            y += 3 * SCALE;
 
-            // Subtotal
-            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
-            const subLine = `Subtotal: ${d.subtotal}`;
-            ctx.fillText(subLine, SCREEN_WIDTH / 4, y);
+            // --- Subtotal ---
+            ctx.fillStyle = colDim;
+            ctx.fillText(`Subtotal: ${d.subtotal}`, SCREEN_WIDTH / 4, y);
             y += lineH;
 
-            // Difficulty multiplier
-            const diffLine = `${d.diffName} Multiplier: x${d.multiplier}`;
-            ctx.fillText(diffLine, SCREEN_WIDTH / 4, y);
+            // --- Difficulty multiplier ---
+            ctx.fillText(`${d.diffName} Multiplier: x${d.multiplier}`, SCREEN_WIDTH / 4, y);
             y += lineH + 3 * SCALE;
 
-            // Total (bigger, centered)
-            ctx.font = `bold ${Math.floor(18 * SCALE / 4)}px monospace`;
+            // --- Total (prominent, with glow) ---
+            ctx.save();
+            ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
+            ctx.fillStyle = colTotal;
+            ctx.shadowColor = 'rgba(130, 255, 200, 0.7)';
+            ctx.shadowBlur = 16;
             const totalStr = `TOTAL: ${d.total.toLocaleString()}`;
-            const totalMetrics = ctx.measureText(totalStr);
-            ctx.fillText(totalStr, SCREEN_WIDTH / 2 - totalMetrics.width / 2, y);
+            const totalW = ctx.measureText(totalStr).width;
+            ctx.fillText(totalStr, SCREEN_WIDTH / 2 - totalW / 2, y);
+            ctx.restore();
         }
 
-        ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+        // --- Prompt ---
+        ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = colDim;
         const prompt = "Press ENTER to continue";
-        const promptMetrics = ctx.measureText(prompt);
-        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 8 * SCALE);
+        const promptW = ctx.measureText(prompt).width;
+        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptW / 2, SCREEN_HEIGHT - 8 * SCALE);
     }
 }
 
