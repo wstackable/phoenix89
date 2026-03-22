@@ -20,6 +20,9 @@ const CHANGELOG = [
             "Special weapon tip shown when launching Brady/Caleb ships",
             "High scores switched from CSV to TSV for fresher data",
             "Changelog footer shows scroll instructions",
+            "High scores backend switched to Firebase Realtime Database",
+            "Scorecard redesigned with cohesive color palette and glow effects",
+            "Post-game flow now shows global leaderboard after name entry",
         ]
     },
     {
