@@ -219,9 +219,17 @@ The enemies array for the megaboss level is:
 
 ## Git Workflow
 
-Will pushes from his own terminal (authenticated via GitHub web). Claude does NOT have push access from Cowork's sandboxed environment. When committing:
+Will pushes from his own terminal (authenticated via GitHub web). When committing:
 - Will runs `git add .` then `git commit -m "message"` then `git push` from his terminal
 - All work happens in `Web Phoenix 89/` directory (that's where .git lives)
+
+## Version Number
+
+**IMPORTANT**: Each time we reach a push point, increment the version number in `ui.js` (line ~406):
+```javascript
+const subtitle = "Claude Edition X.XX";
+```
+Current version: **1.53**. Increment by 0.01 each push (1.54, 1.55, 1.56, etc.).
 
 ## ASM Reference Files
 

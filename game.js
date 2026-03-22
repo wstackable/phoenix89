@@ -837,19 +837,10 @@ class Game {
         this.player.shipType = shipType;
         this.player.loadShip();
 
-        // Give all regular weapons + rapid fire (secret ships are powerful)
-        this.player.weaponsAvailable = 0xFF;
-        this.player.hasHomingMissiles = true;
-        this.player.fireDelay = FIRE_DELAY_RAPID;
-
-        // Set weapon and shield tiers
-        const shieldTiers = {
-            [SHIP_PURPLE_DEVIL]: MAX_SHIELD,      // Elise: full 31
-            [SHIP_DOUBLE_BLASTERY]: MAX_SHIELD - 6, // Brady: 25
-            [SHIP_RED_BOMBER]: MAX_SHIELD - 6,     // Caleb: 25
-        };
-        this.player.shield = shieldTiers[shipType] || MAX_SHIELD;
-
+        // Secret ships keep their custom stats (shield, etc.) but must
+        // earn shop upgrades like normal players. Only their unique special
+        // weapon (index 8-10) is pre-equipped — regular weapons must be bought.
+        // weaponsAvailable stays at default (0b00000001 = normal gun only)
         if (shipInfo && shipInfo.weapon !== undefined) {
             this.player.weaponSelected = shipInfo.weapon;
         } else {
@@ -860,6 +851,14 @@ class Game {
             };
             this.player.weaponSelected = secretWeapons[shipType] || WEAPON_NORMAL;
         }
+
+        // Custom shield per ship (keeps original values)
+        const shieldTiers = {
+            [SHIP_PURPLE_DEVIL]: MAX_SHIELD,      // Elise: full 31
+            [SHIP_DOUBLE_BLASTERY]: MAX_SHIELD - 6, // Brady: 25
+            [SHIP_RED_BOMBER]: MAX_SHIELD - 6,     // Caleb: 25
+        };
+        this.player.shield = shieldTiers[shipType] || MAX_SHIELD;
 
         // Purple Devil: init dragon and wing cooldown
         if (shipType === SHIP_PURPLE_DEVIL) {
