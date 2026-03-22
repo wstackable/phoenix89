@@ -334,10 +334,10 @@ class SoundManager {
     /**
      * Start playing gameplay music (shuffled tracks, loops)
      */
-    startMusic() {
+    startMusic(resetTrack = false) {
         if (!this.musicEnabled) return;
         this.playingMenuMusic = false;
-        this.currentTrack = 0;  // restart playlist from beginning
+        if (resetTrack) this.currentTrack = 0;
         this._playMusicTrack('gameplay');
     }
 

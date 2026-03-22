@@ -66,9 +66,9 @@ const ENEMY_0 = [ETYPE_OPERATOR_LOCATING, 30, 7, 7, "enemy_0_5", -1, EDESTRUCT_N
 const E_TRI = [ETYPE_TRIANGLE, 16, 13, 11, "triangle", null, EDESTRUCT_NORMAL];
 const E_X = [ETYPE_RANDOM_X, 24, 9, 7, "e_x", null, EDESTRUCT_NORMAL];
 
-const E_BOSS1 = [ETYPE_BOSS, 40, 17, 14, "boss_1", -90, EDESTRUCT_NORMAL];
-const E_BOSS2 = [ETYPE_BOSS, 50, 17, 14, "boss_2", -150, EDESTRUCT_NORMAL];
-const E_BOSS3 = [ETYPE_BOSS, 100, 17, 9, "boss_x", -100, EDESTRUCT_NORMAL];
+const E_BOSS1 = [ETYPE_BOSS, 40, 17, 14, "boss_1", -90, EDESTRUCT_BOSS];
+const E_BOSS2 = [ETYPE_BOSS, 50, 17, 14, "boss_2", -150, EDESTRUCT_BOSS];
+const E_BOSS3 = [ETYPE_BOSS, 100, 17, 9, "boss_x", -100, EDESTRUCT_BOSS];
 
 const E_SUPL = [ETYPE_SUPERBOSS_L, 150, 17, 11, "superboss_left", -5, EDESTRUCT_BOSS];
 const E_SUPR = [ETYPE_SUPERBOSS_R, 150, 17, 11, "superboss_right", -5, EDESTRUCT_BOSS];
@@ -908,32 +908,36 @@ class LevelManager {
         return this.timeBonusCounter;
     }
 
-    // ASM base scores: Easy=0, Normal=150000, Hard=300000, Nightmare=500000
-    getBaseScore() {
-        const baseScores = { 1: 0, 2: 150000, 3: 300000, 4: 500000 };
-        return baseScores[this.difficulty] || 0;
+    // Difficulty multipliers: Beginner x1, Intermediate x1.5, Hard x2, Expert x3
+    getDifficultyMultiplier() {
+        const mults = { 1: 1, 2: 1.5, 3: 2, 4: 3 };
+        return mults[this.difficulty] || 1;
     }
 
-    // Running score for HUD display (ASM formula)
-    getRunningScore(player) {
+    getDifficultyName() {
+        return { 1: "Beginner", 2: "Intermediate", 3: "Hard", 4: "Expert" }[this.difficulty] || "Beginner";
+    }
+
+    // Running score for HUD display (starts at 0, builds from kills/waves)
+    getRunningScore(player, enemyMgr) {
         if (player.cheated) return 0;
-        const base = this.getBaseScore();
-        const time = Math.max(0, this.timeBonusCounter);
-        const shield = Math.floor(player.shield / 16);
-        const cash = player.cash * 16;
-        return base + time + shield + cash;
+        return enemyMgr ? enemyMgr.scorePoints : 0;
     }
 
-    calculateScore(player) {
+    // Final score calculation with breakdown
+    calculateScore(player, enemyMgr) {
         if (player.cheated) {
-            return 0;
+            return { killScore: 0, timeBonus: 0, shieldBonus: 0, cashBonus: 0, subtotal: 0, multiplier: 1, total: 0 };
         }
 
-        const base = this.getBaseScore();
-        const timeScore = Math.max(0, this.timeBonusCounter);
-        const shieldScore = Math.floor(player.shield / 16);
-        const cashScore = player.cash * 16;
+        const killScore = enemyMgr ? enemyMgr.scorePoints : 0;
+        const timeBonus = Math.max(0, this.timeBonusCounter);
+        const shieldBonus = player.shield * 100;
+        const cashBonus = Math.floor(player.cash / 10);
+        const subtotal = killScore + timeBonus + shieldBonus + cashBonus;
+        const multiplier = this.getDifficultyMultiplier();
+        const total = Math.floor(subtotal * multiplier);
 
-        return base + timeScore + shieldScore + cashScore;
+        return { killScore, timeBonus, shieldBonus, cashBonus, subtotal, multiplier, total };
     }
 }

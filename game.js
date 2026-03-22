@@ -10,6 +10,8 @@ const STATE_GAME_OVER = "game_over";
 const STATE_SCORE = "score";
 const STATE_HIGH_SCORES = "high_scores";
 const STATE_ABOUT = "about";
+const STATE_INSTRUCTIONS = "instructions";
+const STATE_FEEDBACK = "feedback";
 const STATE_PAUSED = "paused";
 const STATE_DEATH_ANIM = "death_anim";
 const STATE_SECRET_HANGAR = "secret_hangar";
@@ -159,7 +161,7 @@ class ScrollingBorders {
 
         const scrollPx = Math.floor(this.scrollY) * SCALE;
         const stripH = this.PATTERN_LEN * SCALE;
-        const gameH = (ORIG_HEIGHT - 9) * SCALE;
+        const gameH = (ORIG_HEIGHT - 15) * SCALE;
 
         // Blit strip with vertical scroll wrap
         const firstH = Math.min(stripH - scrollPx, gameH);
@@ -455,6 +457,8 @@ class Game {
         this.highScoreScreen = new HighScoreScreen();
         this.scoreScreen = new ScoreScreen();
         this.aboutScreen = new AboutScreen();
+        this.instructionsScreen = new InstructionsScreen();
+        this.feedbackScreen = new FeedbackScreen();
         this.secretHangar = new SecretHangar();
 
         // Background systems
@@ -524,20 +528,29 @@ class Game {
         const key = event.key;
         this.keys[key] = true;
 
+        // Prevent Tab from changing browser focus when typing feedback
+        if (this.state === STATE_FEEDBACK && key === 'Tab') {
+            event.preventDefault();
+        }
+
         // Initialize audio on first interaction
         this.sound.ensureAudioContext();
 
         // Global keys: R cycles radio, M toggles music, C cycles themes
-        if (key === 'r' || key === 'R') {
-            if (this.state !== STATE_HIGH_SCORES) {
-                this.sound.nextTrack();
-                this.radioPopupTimer = 90;
-            }
-        } else if (key === 'm' || key === 'M') {
-            this.sound.toggleMusic();
-        } else if (key === 'c' || key === 'C') {
-            if (this.state !== STATE_HIGH_SCORES && this.state !== STATE_SHOP) {
-                this.spriteMgr.nextTheme();
+        // (disabled during feedback text input and high score entry)
+        const typingState = this.state === STATE_FEEDBACK || (this.state === STATE_HIGH_SCORES && this.highScoreScreen.enteringName);
+        if (!typingState) {
+            if (key === 'r' || key === 'R') {
+                if (this.state !== STATE_HIGH_SCORES) {
+                    this.sound.nextTrack();
+                    this.radioPopupTimer = 90;
+                }
+            } else if (key === 'm' || key === 'M') {
+                this.sound.toggleMusic();
+            } else if (key === 'c' || key === 'C') {
+                if (this.state !== STATE_HIGH_SCORES && this.state !== STATE_SHOP) {
+                    this.spriteMgr.nextTheme();
+                }
             }
         }
 
@@ -563,6 +576,12 @@ class Game {
             } else if (action === "high_scores") {
                 this.highScoreScreen.show();
                 this.state = STATE_HIGH_SCORES;
+            } else if (action === "instructions") {
+                this.instructionsScreen.show();
+                this.state = STATE_INSTRUCTIONS;
+            } else if (action === "feedback") {
+                this.feedbackScreen.show(undefined, undefined, false);
+                this.state = STATE_FEEDBACK;
             } else if (action === "about") {
                 this.aboutScreen.show();
                 this.state = STATE_ABOUT;
@@ -602,7 +621,19 @@ class Game {
                 this.state = STATE_PLAYING;
                 this._advanceToNextLevel();
                 this.player.cheated = true;
+            } else if (key === 'f' || key === 'F') {
+                const levelNum = this.levelMgr.currentLevelGroup + 1;
+                const waveNum = this.levelMgr.waveInLevel > 0 ? this.levelMgr.waveInLevel : 1;
+                this.feedbackScreen.show(levelNum, waveNum, true);
+                this.state = STATE_FEEDBACK;
             } else if (key === 'q' || key === 'Q') {
+                this._returnToTitle();
+            }
+        } else if (this.state === STATE_FEEDBACK) {
+            const result = this.feedbackScreen.handleEvent(event);
+            if (result === "back_to_pause") {
+                this.state = STATE_PAUSED;
+            } else if (result === "back_to_title") {
                 this._returnToTitle();
             }
         } else if (this.state === STATE_SCORE) {
@@ -610,7 +641,7 @@ class Game {
             if (done) {
                 const rank = this.highScoreScreen.checkHighScore(this.finalScore);
                 if (rank >= 0) {
-                    this.highScoreScreen.startEntry(this.finalScore, rank);
+                    this.highScoreScreen.startEntry(this.finalScore, rank, this.levelMgr.difficulty);
                     this.state = STATE_HIGH_SCORES;
                 } else {
                     this._returnToTitle();
@@ -626,10 +657,15 @@ class Game {
             if (done) {
                 this._returnToTitle();
             }
+        } else if (this.state === STATE_INSTRUCTIONS) {
+            const done = this.instructionsScreen.handleEvent(event);
+            if (done) {
+                this._returnToTitle();
+            }
         } else if (this.state === STATE_DEATH_ANIM) {
             // Allow skipping after 1 second
             if (this.deathAnimTimer > 30) {
-                this.finalScore = this.scoreScreen.show(this.player, this.levelMgr);
+                this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
                 this.state = STATE_SCORE;
             }
         }
@@ -729,7 +765,7 @@ class Game {
         }
 
         // Switch from menu music to gameplay music
-        this.sound.startMusic();
+        this.sound.startMusic(true);
 
         this.starField = new StarField();
         this.spaceBg = new SpaceBackground();
@@ -814,7 +850,7 @@ class Game {
         }
 
         // Switch to gameplay music
-        this.sound.startMusic();
+        this.sound.startMusic(true);
 
         this.starField = new StarField();
         this.spaceBg = new SpaceBackground();
@@ -844,6 +880,7 @@ class Game {
                 // Normal combat level - clear bullets for new wave
                 this.weaponSystem.clear();
                 this.state = STATE_PLAYING;
+                this.enemyMgr.scorePoints += 5;  // +5 per wave cleared
 
                 // Check if we entered a new level group (after a boss)
                 const curGroup = this.levelMgr.currentLevelGroup;
@@ -1010,7 +1047,7 @@ class Game {
             this.starField.update();
             this.borders.update();
             if (this.deathAnimTimer >= this.deathAnimDuration) {
-                this.finalScore = this.scoreScreen.show(this.player, this.levelMgr);
+                this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
                 this.state = STATE_SCORE;
             }
             return;
@@ -1158,7 +1195,7 @@ class Game {
             this.sound.play("explosion_large");
         } else if (this.player.alive) {
             // Game completed (all levels done)
-            this.finalScore = this.scoreScreen.show(this.player, this.levelMgr);
+            this.finalScore = this.scoreScreen.show(this.player, this.levelMgr, this.enemyMgr);
             this.state = STATE_SCORE;
         }
     }
@@ -1192,7 +1229,7 @@ class Game {
             this.weaponSystem.draw(ctx, this.spriteMgr);
 
             // HUD
-            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, bg, this.enemyMgr.killCount);
+            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, bg, this.enemyMgr);
 
             // Bomb wave effect
             if (this.bombWaveActive) {
@@ -1263,14 +1300,14 @@ class Game {
                 ctx.globalAlpha = 1.0;
             }
 
-            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, theme.bg || COLOR_BG, this.enemyMgr.killCount);
+            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, theme.bg || COLOR_BG, this.enemyMgr);
 
         } else if (this.state === STATE_PAUSED) {
             const bg = theme.bg || COLOR_BG;
             ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             this.starField.draw(ctx, theme.stars || COLOR_FG);
-            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, bg, this.enemyMgr.killCount);
+            this.hud.draw(ctx, this.player, this.levelMgr, theme.hud || COLOR_FG, bg, this.enemyMgr);
 
             ctx.fillStyle = `rgba(0, 0, 0, 0.5)`;
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -1282,12 +1319,20 @@ class Game {
             ctx.fillText(pausedText, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT / 2 - 20);
 
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            const infoText = "ESC: Resume | S: Store | N: Next Wave | Q: Quit";
+            const infoText = "ESC: Resume | S: Store | F: Feedback / Bugs";
             const iw = ctx.measureText(infoText).width;
             ctx.fillText(infoText, SCREEN_WIDTH / 2 - iw / 2, SCREEN_HEIGHT / 2 + 20);
 
+            const infoText2 = "N: Next Wave | Q: Quit";
+            const iw2 = ctx.measureText(infoText2).width;
+            ctx.fillText(infoText2, SCREEN_WIDTH / 2 - iw2 / 2, SCREEN_HEIGHT / 2 + 40);
+
         } else if (this.state === STATE_ABOUT) {
             this.aboutScreen.draw(ctx);
+        } else if (this.state === STATE_INSTRUCTIONS) {
+            this.instructionsScreen.draw(ctx);
+        } else if (this.state === STATE_FEEDBACK) {
+            this.feedbackScreen.draw(ctx);
         } else if (this.state === STATE_SCORE) {
             this.scoreScreen.draw(ctx);
         } else if (this.state === STATE_HIGH_SCORES) {

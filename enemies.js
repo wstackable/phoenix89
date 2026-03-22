@@ -216,6 +216,7 @@ class EnemyManager {
         this.enemies = [];
         this.enemiesRemaining = 0;
         this.killCount = 0;      // running kill counter for score display
+        this.scorePoints = 0;    // running score from kills
         this.cycleCounter = 0;  // global frame counter
         this.difficulty = DIFF_BEGINNER;
         this.xyData = [];        // coordinate table for formation enemies
@@ -1084,13 +1085,14 @@ class EnemyManager {
     }
 
     _explosionFinished(e, ws) {
-        // Small enemy cash drop: 1/10 chance for $10 (ASM original: 1/16 for $10)
-        if (ws && Math.floor(Math.random() * 10) === 0) {
-            ws.deployCash(e.x, e.y, 10);
+        // Small enemy cash drop: 1/4 chance for $50 (matches Python desktop version)
+        if (ws && Math.floor(Math.random() * 4) === 0) {
+            ws.deployCash(e.x, e.y, 50);
         }
         e.alive = false;
         this.enemiesRemaining -= 1;
         this.killCount += 1;
+        this.scorePoints += 10;  // +10 per small enemy kill
     }
 
     _largeExplosionFinished(e, ws) {
@@ -1098,36 +1100,31 @@ class EnemyManager {
             e.alive = false;
             this.enemiesRemaining -= 1;
             this.killCount += 1;
+            this.scorePoints += 10;
             return;
         }
 
         if (e.destruct === EDESTRUCT_BOSS || e.destruct === EDESTRUCT_MBC) {
-            // Boss enemy: 2/3 chance to drop cash (matching ASM)
-            if (Math.floor(Math.random() * 3) > 0) {
-                let value = 100;
-                if (this.difficulty <= DIFF_BEGINNER) {
-                    // Beginner: 1/2 chance for $500 vs $100
-                    if (Math.floor(Math.random() * 2) === 0) {
-                        value = 500;
-                    }
-                } else if (this.difficulty <= DIFF_INTERMEDIATE) {
-                    // Intermediate: 1/3 chance for $500
-                    if (Math.floor(Math.random() * 3) === 0) {
-                        value = 500;
-                    }
-                } else {
-                    // Hard/Expert: 1/5 chance for $500
-                    if (Math.floor(Math.random() * 5) === 0) {
-                        value = 500;
-                    }
-                }
-                ws.deployCash(e.x, e.y, value);
+            // Boss enemy: always drops cash with random variation
+            const roll = Math.floor(Math.random() * 10);
+            let value;
+            if (roll < 3) {
+                value = 50;   // 30% chance: low drop
+            } else if (roll < 7) {
+                value = 200;  // 40% chance: medium drop
+            } else if (roll < 9) {
+                value = 500;  // 20% chance: high drop
+            } else {
+                value = 1000; // 10% chance: jackpot
             }
+            ws.deployCash(e.x, e.y, value);
+            this.scorePoints += 50;  // +50 per boss kill
         } else {
-            // Non-boss large explosion: 1/6 chance for $50
-            if (Math.floor(Math.random() * 6) === 0) {
+            // Non-boss large explosion: 1/4 chance for $50 (matches Python desktop)
+            if (Math.floor(Math.random() * 4) === 0) {
                 ws.deployCash(e.x, e.y, 50);
             }
+            this.scorePoints += 10;  // +10 per non-boss large kill
         }
 
         e.alive = false;

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TI-89 Menu Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: monospace;
+  }
+
+  .calculator-body {
+    background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+    border-radius: 18px;
+    padding: 32px 28px 48px;
+    box-shadow:
+      0 0 0 3px #333,
+      0 0 0 6px #111,
+      0 20px 60px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+    position: relative;
+  }
+
+  .calc-label {
+    text-align: center;
+    color: #888;
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    font-family: Arial, sans-serif;
+  }
+  .calc-label span {
+    color: #aaa;
+    font-weight: bold;
+    font-size: 13px;
+  }
+
+  .lcd-bezel {
+    background: linear-gradient(180deg, #3a3a3a, #2a2a2a);
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow:
+      inset 0 2px 8px rgba(0,0,0,0.6),
+      0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .lcd-screen {
+    width: 640px;
+    height: 400px;
+    background: #8b9d6b;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
+    image-rendering: pixelated;
+  }
+
+  /* Subtle LCD pixel grid overlay */
+  .lcd-screen::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.03) 3px,
+        rgba(0,0,0,0.03) 4px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.03) 3px,
+        rgba(0,0,0,0.03) 4px
+      );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Slight LCD reflection */
+  .lcd-screen::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 40%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), transparent);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  canvas {
+    display: block;
+    width: 640px;
+    height: 400px;
+    image-rendering: pixelated;
+  }
+
+  .buttons-hint {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-fake {
+    width: 36px;
+    height: 28px;
+    background: linear-gradient(180deg, #444, #333);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+</style>
+</head>
+<body>
+
+<div class="calculator-body">
+  <div class="calc-label"><span>TI-89</span> Titanium</div>
+  <div class="lcd-bezel">
+    <div class="lcd-screen">
+      <canvas id="menuCanvas" width="640" height="400"></canvas>
+    </div>
+  </div>
+  <div class="buttons-hint">
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+    <div class="btn-fake"></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('menuCanvas');
+const ctx = canvas.getContext('2d');
+
+const SCALE = 4;
+const W = 640;
+const H = 400;
+
+// TI-89 LCD colors
+const LCD_BG = '#8b9d6b';      // greenish gray
+const LCD_FG = '#2a3320';      // very dark green-black
+const LCD_MID = '#6b7d53';     // mid tone for borders/accents
+const LCD_LIGHT = '#9aad7a';   // lighter shade for highlights
+
+// Chunky pixel font helper — draws blocky text
+function drawPixelText(text, x, y, size, color = LCD_FG) {
+  ctx.fillStyle = color;
+  ctx.font = `bold ${size}px monospace`;
+  ctx.fillText(text, x, y);
+}
+
+function drawScreen() {
+  // LCD background
+  ctx.fillStyle = LCD_BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // Outer border (double line, TI-89 style)
+  ctx.strokeStyle = LCD_FG;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(8, 8, W - 16, H - 16);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(14, 14, W - 28, H - 28);
+
+  // Title: PHOENIX 89
+  ctx.fillStyle = LCD_FG;
+  ctx.font = `bold ${7 * SCALE}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const titleY = 32;
+  ctx.fillText('PHOENIX 89', W / 2, titleY);
+
+  // Decorative line under title
+  ctx.fillStyle = LCD_FG;
+  ctx.fillRect(60, titleY + 7 * SCALE + 8, W - 120, 3);
+
+  // Subtitle
+  ctx.font = `${Math.floor(2.5 * SCALE)}px monospace`;
+  ctx.fillStyle = LCD_MID;
+  ctx.fillText('Claude Edition 1.1', W / 2, titleY + 7 * SCALE + 18);
+
+  // Menu items
+  const menuItems = ['New Game', 'Level Select', 'High Scores', 'About', 'Quit'];
+  const menuStartY = 160;
+  const lineH = 36;
+  const fontSize = Math.floor(3.5 * SCALE);
+  ctx.font = `${fontSize}px monospace`;
+  ctx.textAlign = 'left';
+
+  const menuX = 100;
+  const selected = 0; // mockup: first item selected
+
+  for (let i = 0; i < menuItems.length; i++) {
+    const iy = menuStartY + i * lineH;
+
+    if (i === selected) {
+      // Selection: inverted bar (dark bg, light text) — classic LCD selection
+      ctx.fillStyle = LCD_FG;
+      ctx.fillRect(menuX - 12, iy - 2, W - 2 * menuX + 24, lineH - 4);
+      ctx.fillStyle = LCD_BG;
+      ctx.fillText(menuItems[i], menuX, iy + 4);
+
+      // Small arrow
+      ctx.fillStyle = LCD_BG;
+      ctx.beginPath();
+      ctx.moveTo(menuX - 8, iy + lineH / 2 - 8);
+      ctx.lineTo(menuX + 2, iy + lineH / 2 - 2);
+      ctx.lineTo(menuX - 8, iy + lineH / 2 + 4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Difficulty tag for New Game
+      if (i === 0) {
+        ctx.fillStyle = LCD_BG;
+        const tag = '<Beginner>';
+        ctx.fillText(tag, menuX + ctx.measureText(menuItems[i]).width + 16, iy + 4);
+      }
+    } else {
+      ctx.fillStyle = LCD_FG;
+      ctx.fillText(menuItems[i], menuX, iy + 4);
+    }
+  }
+
+  // Bottom status line
+  ctx.fillStyle = LCD_FG;
+  ctx.fillRect(14, H - 42, W - 28, 1);
+  ctx.font = `${Math.floor(2.2 * SCALE)}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = LCD_MID;
+  ctx.fillText('UP/DOWN: Select   ENTER: Confirm   LEFT/RIGHT: Adjust', W / 2, H - 28);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+drawScreen();
+
+// Blink the selection bar subtly
+let blinkOn = true;
+setInterval(() => {
+  drawScreen();
+}, 800);
+</script>
+
+</body>
+</html>
+</script>
+</body>
+</html>

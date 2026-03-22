@@ -9,14 +9,14 @@
 class HUD {
     constructor() {}
 
-    draw(ctx, player, levelMgr, fgColor = null, bgColor = null, killCount = 0) {
+    draw(ctx, player, levelMgr, fgColor = null, bgColor = null, enemyMgr = null) {
         const fg = fgColor || COLOR_FG;
         const bg = bgColor || COLOR_BG;
 
-        // Status bar background - 9 original rows to fit bar + text
-        const statusY = (ORIG_HEIGHT - 9) * SCALE;
+        // Status bar background - 15 original rows to fit bar + text comfortably
+        const statusY = (ORIG_HEIGHT - 15) * SCALE;
         ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
-        ctx.fillRect(0, statusY, SCREEN_WIDTH, 9 * SCALE);
+        ctx.fillRect(0, statusY, SCREEN_WIDTH, 15 * SCALE);
 
         // Top border line
         ctx.strokeStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
@@ -27,7 +27,7 @@ class HUD {
         ctx.stroke();
 
         // Heart icon and shield bar
-        const barY = statusY + SCALE;
+        const barY = statusY + 2 * SCALE;
         const barH = Math.max(4, SCALE + 2);
         const heartSize = barH;
         const hx = 3 * SCALE;
@@ -100,11 +100,11 @@ class HUD {
             }
         }
 
-        // Status text - below health bar with padding
-        const textY = barY + barH + 2 * SCALE;
+        // Status text - below health bar with generous padding
+        const textY = barY + barH + 3 * SCALE;
         const levelNum = levelMgr.currentLevelGroup + 1;
         const waveNum = levelMgr.waveInLevel > 0 ? levelMgr.waveInLevel : 1;
-        const score = levelMgr.getRunningScore(player);
+        const score = levelMgr.getRunningScore(player, enemyMgr);
         const status = `$${player.cash.toString().padStart(5, '0')}  HP:${player.shield.toString().padStart(2, '0')}  L${levelNum}-W${waveNum}  Gun:${player.weaponSelected + 1}  B:${player.bombs}  S:${score}`;
 
         ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
@@ -370,14 +370,16 @@ class TitleScreen {
             }
         }
 
+        // Left/Right for level select on Level Select row (now index 1, unchanged)
+
         // Menu navigation
-        const numItems = 5;
+        const numItems = 6;
         if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
             this.selected = (this.selected - 1 + numItems) % numItems;
         } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
             this.selected = (this.selected + 1) % numItems;
         } else if (event.key === 'Enter' || event.key === ' ') {
-            const actions = ["new_game", "level_select", "high_scores", "about", "quit"];
+            const actions = ["new_game", "level_select", "instructions", "high_scores", "feedback", "about"];
             return actions[this.selected] || null;
         }
         return null;
@@ -397,7 +399,7 @@ class TitleScreen {
         ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
         const title = "PHOENIX 89";
         const titleMetrics = ctx.measureText(title);
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 7 * SCALE);
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 12 * SCALE);
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
@@ -406,7 +408,7 @@ class TitleScreen {
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
         // Menu items
-        const menuItems = ["New Game", "Level Select", "High Scores", "About", "Quit"];
+        const menuItems = ["New Game", "Level Select", "Instructions", "High Scores", "Suggestions / Bugs", "About"];
         const menuFontSize = Math.floor(14 * SCALE / 4);
         ctx.font = `${menuFontSize}px monospace`;
         ctx.textBaseline = 'top';
@@ -441,19 +443,6 @@ class TitleScreen {
             y += lineH;
         }
         ctx.textBaseline = 'alphabetic';
-
-        // Controls section
-        ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
-        y = SCREEN_HEIGHT - 22 * SCALE;
-        const controls = [
-            "SPACE: Fire  R-Shift: Bomb  1-8: Weapons",
-            "R: Radio  C: Theme  M: Mute",
-            "Arrows: Move  ESC: Pause",
-        ];
-        for (const line of controls) {
-            ctx.fillText(line, leftMargin, y);
-            y += 4 * SCALE;
-        }
 
         // Credit
         ctx.font = `${Math.floor(8 * SCALE / 4)}px monospace`;
@@ -496,20 +485,22 @@ class AboutScreen {
 
         ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
         const lines = [
-            "CREATIVE DIRECTORS",
-            "Brady, Elise & Caleb Stackable",
-            "",
             "Inspired by Phoenix for TI-89",
-            "by Patrick Davidson  (1998-2005)",
-            "A legendary 30KB shoot-em-up in",
-            "68000 assembly for a 160x100 LCD.",
+            "by Patrick Davidson (~1998)",
+            "A legendary space shooter written",
+            "in 68000 assembly for a 160x100",
+            "LCD in > 30kb. Insane.",
+            "My favorite game to play in AP Calc.",
             "",
-            "CODEBASE: ~9000 lines of JS",
+            "OUR CODEBASE: ~9000 lines of JS",
             "9 modules / procedural audio",
             "35+ enemy types / 11 weapons",
             "Built entirely with Claude Code",
             "",
             "Will Stackable, March 2026",
+            "",
+            "CREATIVE DIRECTORS",
+            "Brady, Elise & Caleb Stackable",
         ];
 
         let y = 16 * SCALE;
@@ -530,6 +521,281 @@ class AboutScreen {
     }
 }
 
+// ─── Instructions Screen Class ──────────────────────────────
+
+class InstructionsScreen {
+    constructor() {
+        this.active = false;
+    }
+
+    show() {
+        this.active = true;
+    }
+
+    handleEvent(event) {
+        if (event.type === 'keydown') {
+            if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
+                this.active = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+        const title = "HOW TO PLAY";
+        const titleMetrics = ctx.measureText(title);
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
+
+        ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+        const sections = [
+            { heading: "OBJECTIVE", lines: [
+                "Destroy all enemies in each wave.",
+                "Earn cash to buy upgrades in the shop.",
+                "Survive as long as you can!",
+            ]},
+            { heading: "CONTROLS", lines: [
+                "Arrow Keys .... Move",
+                "Space ......... Fire",
+                "Right Shift ... Drop Bomb",
+                "1-8 ........... Switch Weapon",
+                "ESC ........... Pause",
+            ]},
+            { heading: "OTHER KEYS", lines: [
+                "R: Radio   C: Color Theme   M: Mute",
+            ]},
+        ];
+
+        let y = 16 * SCALE;
+        const leftX = 8 * SCALE;
+
+        for (const section of sections) {
+            // Section heading
+            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+            ctx.fillText(section.heading, leftX, y);
+            y += 5 * SCALE;
+
+            // Section lines
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            for (const line of section.lines) {
+                ctx.fillText(line, leftX + 2 * SCALE, y);
+                y += 4 * SCALE;
+            }
+            y += 3 * SCALE;
+        }
+
+        ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+        const prompt = "Press any key to return";
+        const promptMetrics = ctx.measureText(prompt);
+        ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 6 * SCALE);
+    }
+}
+
+// ─── Feedback Screen Class ──────────────────────────────────
+
+class FeedbackScreen {
+    constructor() {
+        this.active = false;
+        this.type = 0;           // 0 = Bug, 1 = Suggestion
+        this.message = "";
+        this.maxLen = 200;
+        this.phase = "compose";  // compose, sending, thankyou
+        this.gameInfo = "";
+        this.cameFromPause = false;
+    }
+
+    show(levelNum, waveNum, fromPause = false) {
+        this.active = true;
+        this.type = 0;
+        this.message = "";
+        this.phase = "compose";
+        this.cameFromPause = fromPause;
+        if (levelNum !== undefined && waveNum !== undefined) {
+            this.gameInfo = `L${levelNum}-W${waveNum}`;
+        } else {
+            this.gameInfo = "Main Menu";
+        }
+    }
+
+    handleEvent(event) {
+        if (event.type !== 'keydown') return null;
+
+        if (this.phase === "thankyou") {
+            if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
+                this.active = false;
+                return this.cameFromPause ? "back_to_pause" : "back_to_title";
+            }
+            return null;
+        }
+
+        if (this.phase === "sending") return null;
+
+        // Compose phase
+        if (event.key === 'Escape') {
+            this.active = false;
+            return this.cameFromPause ? "back_to_pause" : "back_to_title";
+        }
+
+        if (event.key === 'Tab') {
+            this.type = (this.type + 1) % 2;
+            event.preventDefault();
+            return null;
+        }
+
+        if (event.key === 'Enter' && this.message.trim().length > 0) {
+            this._submit();
+            return null;
+        }
+
+        if (event.key === 'Backspace') {
+            this.message = this.message.slice(0, -1);
+            return null;
+        }
+
+        // Typing characters
+        if (event.key.length === 1 && this.message.length < this.maxLen) {
+            this.message += event.key;
+        }
+
+        return null;
+    }
+
+    _submit() {
+        this.phase = "sending";
+        const typeStr = this.type === 0 ? "Bug" : "Suggestion";
+        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScMVpjo84LdvChAqCYzLjzxVVmcKbwY3wRB1MyYQ8rTC3WPYA/formResponse";
+
+        const params = new URLSearchParams();
+        params.append("entry.519590514", typeStr);
+        params.append("entry.1216245615", this.message.trim());
+        params.append("entry.2127842826", this.gameInfo);
+
+        fetch(formUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params.toString(),
+        }).then(() => {
+            this.phase = "thankyou";
+        }).catch(() => {
+            // Even on CORS error, Google Forms usually receives it
+            this.phase = "thankyou";
+        });
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+
+        if (this.phase === "thankyou") {
+            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+            const ty = "THANK YOU!";
+            const tw = ctx.measureText(ty).width;
+            ctx.fillText(ty, SCREEN_WIDTH / 2 - tw / 2, 30 * SCALE);
+
+            ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+            const msg1 = "Your feedback has been submitted.";
+            const msg2 = "Will is going to take a look at it.";
+            const m1w = ctx.measureText(msg1).width;
+            const m2w = ctx.measureText(msg2).width;
+            ctx.fillText(msg1, SCREEN_WIDTH / 2 - m1w / 2, 42 * SCALE);
+            ctx.fillText(msg2, SCREEN_WIDTH / 2 - m2w / 2, 48 * SCALE);
+
+            ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+            const prompt = "Press any key to return";
+            const pw = ctx.measureText(prompt).width;
+            ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
+            return;
+        }
+
+        if (this.phase === "sending") {
+            ctx.font = `${Math.floor(16 * SCALE / 4)}px monospace`;
+            const st = "Sending...";
+            const sw = ctx.measureText(st).width;
+            ctx.fillText(st, SCREEN_WIDTH / 2 - sw / 2, SCREEN_HEIGHT / 2);
+            return;
+        }
+
+        // Compose phase
+        ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+        const title = "FEEDBACK";
+        const titleW = ctx.measureText(title).width;
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 6 * SCALE);
+
+        const leftX = 6 * SCALE;
+        let y = 18 * SCALE;
+
+        // Type selector
+        ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+        ctx.fillText("Type:  (TAB to switch)", leftX, y);
+        y += 5 * SCALE;
+
+        ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+        const types = ["Bug Report", "Suggestion (how could we improve the game?)"];
+        for (let i = 0; i < types.length; i++) {
+            const label = (i === this.type ? "> " : "  ") + types[i];
+            ctx.fillStyle = i === this.type
+                ? `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`
+                : `rgb(${Math.floor(COLOR_FG[0] * 0.5)}, ${Math.floor(COLOR_FG[1] * 0.5)}, ${Math.floor(COLOR_FG[2] * 0.5)})`;
+            ctx.fillText(label, leftX + 2 * SCALE, y);
+            y += 4 * SCALE;
+        }
+
+        y += 3 * SCALE;
+        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+        ctx.fillText("Message:", leftX, y);
+        y += 5 * SCALE;
+
+        // Text input box
+        const boxX = leftX;
+        const boxY = y;
+        const boxW = SCREEN_WIDTH - 12 * SCALE;
+        const boxH = 28 * SCALE;
+        ctx.strokeStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        // Word-wrap the message text inside the box
+        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const charW = ctx.measureText("M").width;
+        const maxCharsPerLine = Math.floor((boxW - 2 * SCALE) / charW);
+        const lines = [];
+        let remaining = this.message + "_";  // cursor
+        while (remaining.length > 0) {
+            lines.push(remaining.slice(0, maxCharsPerLine));
+            remaining = remaining.slice(maxCharsPerLine);
+        }
+
+        let ty = boxY + 3 * SCALE;
+        for (const line of lines) {
+            if (ty + 3 * SCALE > boxY + boxH) break;
+            ctx.fillText(line, boxX + SCALE, ty);
+            ty += 3 * SCALE;
+        }
+
+        // Game info tag
+        ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = `rgb(${Math.floor(COLOR_FG[0] * 0.5)}, ${Math.floor(COLOR_FG[1] * 0.5)}, ${Math.floor(COLOR_FG[2] * 0.5)})`;
+        ctx.fillText(`Location: ${this.gameInfo}`, leftX, boxY + boxH + 4 * SCALE);
+
+        // Bottom prompts
+        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+        const p1 = "ENTER: Submit   ESC: Cancel";
+        const p1w = ctx.measureText(p1).width;
+        ctx.fillText(p1, SCREEN_WIDTH / 2 - p1w / 2, SCREEN_HEIGHT - 6 * SCALE);
+    }
+}
+
 // ─── High Score Screen Class ────────────────────────────────
 
 class HighScoreScreen {
@@ -539,13 +805,16 @@ class HighScoreScreen {
             ["---", 0], ["---", 0], ["---", 0], ["---", 0],
             ["---", 0], ["---", 0], ["---", 0], ["---", 0],
         ];
+        this.globalScores = [];
+        this.loadingGlobal = false;
+        this.lastFetchTime = 0;
+        this.difficulty = DIFF_BEGINNER;
         this.enteringName = false;
         this.newScore = 0;
         this.newRank = -1;
-        this.initials = [0, 0, 0];
-        this.cursorPos = 0;
+        this.nameInput = "";
+        this.maxNameLen = 12;
         this.blinkTimer = 0;
-        this.validChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
         this._load();
     }
 
@@ -568,6 +837,59 @@ class HighScoreScreen {
         }
     }
 
+    _getDiffName(diff) {
+        return { 1: "Beginner", 2: "Intermediate", 3: "Hard", 4: "Expert" }[diff] || "Beginner";
+    }
+
+    _submitGlobalScore(name, score, difficulty) {
+        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeAFpn0ZtcWkWY1BJumSuGxOcxbpcuvPsUoLGu_ppA3Flr7Ew/formResponse";
+        const params = new URLSearchParams();
+        params.append("entry.527207579", name);
+        params.append("entry.903331487", score.toString());
+        params.append("entry.173028998", this._getDiffName(difficulty));
+
+        fetch(formUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params.toString(),
+        }).catch(() => {});
+    }
+
+    fetchGlobalScores() {
+        // Don't fetch more than once every 30 seconds
+        const now = Date.now();
+        if (now - this.lastFetchTime < 30000 && this.globalScores.length > 0) return;
+
+        this.loadingGlobal = true;
+        this.lastFetchTime = now;
+        const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxGVgr1ZW6tjTrrmSy414-B_GIwjS3f7KGWuVRYW1RcS_Iq9pfrgAJ9RUp-gZLHEtx9kSuYye31EQ0/pub?output=csv&cachebust=" + now;
+
+        fetch(sheetUrl)
+            .then(r => r.text())
+            .then(csv => {
+                const rows = csv.trim().split('\n').slice(1); // skip header
+                const parsed = [];
+                for (const row of rows) {
+                    // CSV: Timestamp, Name, Score, Difficulty
+                    const cols = row.split(',');
+                    if (cols.length >= 3) {
+                        const name = (cols[1] || "???").replace(/"/g, '').trim();
+                        const score = parseInt(cols[2], 10) || 0;
+                        const diff = (cols[3] || "").replace(/"/g, '').trim();
+                        parsed.push([name, score, diff]);
+                    }
+                }
+                // Sort by score descending, keep top 8
+                parsed.sort((a, b) => b[1] - a[1]);
+                this.globalScores = parsed.slice(0, 8);
+                this.loadingGlobal = false;
+            })
+            .catch(() => {
+                this.loadingGlobal = false;
+            });
+    }
+
     checkHighScore(score) {
         for (let i = 0; i < this.scores.length; i++) {
             if (score > this.scores[i][1]) {
@@ -577,46 +899,42 @@ class HighScoreScreen {
         return -1;
     }
 
-    startEntry(score, rank) {
+    startEntry(score, rank, difficulty) {
         this.active = true;
         this.enteringName = true;
         this.newScore = score;
         this.newRank = rank;
-        this.initials = [0, 0, 0];
-        this.cursorPos = 0;
+        this.difficulty = difficulty || DIFF_BEGINNER;
+        this.nameInput = "";
         this.blinkTimer = 0;
     }
 
     show() {
         this.active = true;
         this.enteringName = false;
+        this.fetchGlobalScores();
     }
 
     handleEvent(event) {
         if (event.type !== 'keydown') return false;
 
         if (this.enteringName) {
-            if (event.key === 'Enter') {
-                const name = this.initials.map(i => this.validChars[i]).join('');
+            if (event.key === 'Enter' && this.nameInput.trim().length > 0) {
+                const name = this.nameInput.trim();
                 this.scores.splice(this.newRank, 0, [name, this.newScore]);
                 this.scores = this.scores.slice(0, 8);
                 this._save();
+                this._submitGlobalScore(name, this.newScore, this.difficulty);
                 this.enteringName = false;
+                this.fetchGlobalScores();
                 return true;
-            } else if (event.key === 'ArrowUp') {
-                this.initials[this.cursorPos] = (this.initials[this.cursorPos] + 1) % this.validChars.length;
-            } else if (event.key === 'ArrowDown') {
-                this.initials[this.cursorPos] = (this.initials[this.cursorPos] - 1 + this.validChars.length) % this.validChars.length;
-            } else if (event.key === 'ArrowRight') {
-                this.cursorPos = Math.min(this.cursorPos + 1, 2);
-            } else if (event.key === 'ArrowLeft') {
-                this.cursorPos = Math.max(this.cursorPos - 1, 0);
-            } else if (event.key.length === 1) {
-                const ch = event.key.toUpperCase();
-                const idx = this.validChars.indexOf(ch);
-                if (idx >= 0) {
-                    this.initials[this.cursorPos] = idx;
-                    if (this.cursorPos < 2) this.cursorPos++;
+            } else if (event.key === 'Backspace') {
+                this.nameInput = this.nameInput.slice(0, -1);
+            } else if (event.key.length === 1 && this.nameInput.length < this.maxNameLen) {
+                // Allow letters, numbers, spaces
+                const ch = event.key;
+                if (/[a-zA-Z0-9 ]/.test(ch)) {
+                    this.nameInput += ch;
                 }
             }
         } else {
@@ -635,80 +953,86 @@ class HighScoreScreen {
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
         ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
-        ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
-        const title = "HIGH SCORES";
-        const titleMetrics = ctx.measureText(title);
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
 
-        ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-        let y = 18 * SCALE;
-        for (let i = 0; i < this.scores.length; i++) {
-            const [name, score] = this.scores[i];
-            const highlight = this.enteringName && i === this.newRank;
+        if (this.enteringName) {
+            // Name entry mode: show local scores
+            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+            const title = "HIGH SCORES";
+            const titleMetrics = ctx.measureText(title);
+            ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
 
-            if (highlight) {
-                const nameDisplay = this.initials.map(idx => this.validChars[idx]).join('');
-                const line = ` ${(i + 1).toString().padStart(3, ' ')} ${nameDisplay}  ${this.newScore.toString().padStart(8, ' ')}`;
-                ctx.fillText(line, SCREEN_WIDTH / 4, y);
-            } else {
-                const line = ` ${(i + 1).toString().padStart(3, ' ')} ${name}  ${score.toString().padStart(8, ' ')}`;
-                ctx.fillText(line, SCREEN_WIDTH / 4, y);
+            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            let y = 18 * SCALE;
+            for (let i = 0; i < this.scores.length; i++) {
+                const [name, score] = this.scores[i];
+                const highlight = i === this.newRank;
+
+                if (highlight) {
+                    const nameDisplay = this.nameInput || "___";
+                    const line = ` ${(i + 1).toString().padStart(3, ' ')} ${nameDisplay.padEnd(12, ' ')} ${this.newScore.toString().padStart(8, ' ')}`;
+                    ctx.fillText(line, SCREEN_WIDTH / 4, y);
+                } else {
+                    const line = ` ${(i + 1).toString().padStart(3, ' ')} ${name}  ${score.toString().padStart(8, ' ')}`;
+                    ctx.fillText(line, SCREEN_WIDTH / 4, y);
+                }
+
+                y += 8 * SCALE;
             }
+        } else {
+            // Viewing mode: show global leaderboard
+            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+            const title = "GLOBAL HIGH SCORES";
+            const titleMetrics = ctx.measureText(title);
+            ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
 
-            y += 8 * SCALE;
+            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            let y = 18 * SCALE;
+
+            if (this.loadingGlobal && this.globalScores.length === 0) {
+                const loadText = "Loading scores...";
+                const lw = ctx.measureText(loadText).width;
+                ctx.fillText(loadText, SCREEN_WIDTH / 2 - lw / 2, y);
+            } else if (this.globalScores.length === 0) {
+                const emptyText = "No scores yet. Be the first!";
+                const ew = ctx.measureText(emptyText).width;
+                ctx.fillText(emptyText, SCREEN_WIDTH / 2 - ew / 2, y);
+            } else {
+                for (let i = 0; i < this.globalScores.length; i++) {
+                    const [name, score, diff] = this.globalScores[i];
+                    const line = ` ${(i + 1).toString().padStart(2, ' ')}  ${name.padEnd(12, ' ')} ${score.toString().padStart(8, ' ')}  ${diff}`;
+                    ctx.fillText(line, 6 * SCALE, y);
+                    y += 6 * SCALE;
+                }
+            }
         }
 
         if (this.enteringName) {
-            const entryY = SCREEN_HEIGHT - 20 * SCALE;
-            ctx.font = `${Math.floor(24 * SCALE / 4)}px monospace`;
-            const totalW = 30 * SCALE;
-            const startX = SCREEN_WIDTH / 2 - totalW / 2;
-
-            for (let i = 0; i < 3; i++) {
-                const ch = this.validChars[this.initials[i]];
-                const cx = startX + i * 10 * SCALE + 5 * SCALE;
-                const chMetrics = ctx.measureText(ch);
-                ctx.fillText(ch, cx - chMetrics.width / 2, entryY);
-
-                if (i === this.cursorPos) {
-                    // Up arrow - pushed further above the letter
-                    const arrowGap = 2 * SCALE;
-                    const arrowH = 3 * SCALE;
-                    const upTip = entryY - arrowGap - arrowH;
-                    const upBase = entryY - arrowGap;
-                    ctx.beginPath();
-                    ctx.moveTo(cx, upTip);
-                    ctx.lineTo(cx - 2 * SCALE, upBase);
-                    ctx.lineTo(cx + 2 * SCALE, upBase);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // Down arrow - pushed further below the letter
-                    const letterH = Math.floor(24 * SCALE / 4);
-                    const downBase = entryY + letterH + arrowGap;
-                    const downTip = downBase + arrowH;
-                    ctx.beginPath();
-                    ctx.moveTo(cx, downTip);
-                    ctx.lineTo(cx - 2 * SCALE, downBase);
-                    ctx.lineTo(cx + 2 * SCALE, downBase);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // Blink underline
-                    if (this.blinkTimer < 25) {
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.moveTo(startX + i * 10 * SCALE + SCALE, entryY + Math.floor(24 * SCALE / 4) + SCALE);
-                        ctx.lineTo(startX + i * 10 * SCALE + 9 * SCALE, entryY + Math.floor(24 * SCALE / 4) + SCALE);
-                        ctx.stroke();
-                    }
-                }
-            }
-
+            // Text input area
+            const entryY = SCREEN_HEIGHT - 22 * SCALE;
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            const prompt = "UP/DOWN or type  LEFT/RIGHT  ENTER to save";
-            const promptMetrics = ctx.measureText(prompt);
-            ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 5 * SCALE);
+            const label = "Enter your name:";
+            const lw = ctx.measureText(label).width;
+            ctx.fillText(label, SCREEN_WIDTH / 2 - lw / 2, entryY);
+
+            // Input box
+            const boxW = 52 * SCALE;
+            const boxH = 6 * SCALE;
+            const boxX = SCREEN_WIDTH / 2 - boxW / 2;
+            const boxY = entryY + 3 * SCALE;
+            ctx.strokeStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+            // Name text with blinking cursor
+            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+            const cursor = this.blinkTimer < 25 ? "_" : " ";
+            const display = this.nameInput + cursor;
+            ctx.fillText(display, boxX + 2 * SCALE, boxY + Math.floor(4.5 * SCALE));
+
+            ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+            const prompt = "Type your name, then press ENTER";
+            const pw = ctx.measureText(prompt).width;
+            ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 5 * SCALE);
         }
     }
 }
@@ -721,32 +1045,20 @@ class ScoreScreen {
         this.scoreData = {};
     }
 
-    show(player, levelMgr) {
+    show(player, levelMgr, enemyMgr) {
         this.active = true;
         const cheated = player.cheated || false;
 
         if (cheated) {
             this.scoreData = {
-                difficultyBonus: 0,
-                timeBonus: 0,
-                shieldBonus: 0,
-                cashBonus: 0,
-                total: 0,
-                cheated: true,
+                killScore: 0, timeBonus: 0, shieldBonus: 0, cashBonus: 0,
+                subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0, cheated: true,
             };
         } else {
-            const baseScore = levelMgr.getBaseScore();
-            const timeLeft = Math.max(0, levelMgr.timeBonusCounter || 0);
-            const shieldLevel = Math.floor(player.shield / 16);
-            const extraCash = player.cash * 16;
-            const total = baseScore + timeLeft + shieldLevel + extraCash;
-
+            const result = levelMgr.calculateScore(player, enemyMgr);
             this.scoreData = {
-                baseScore: baseScore,
-                timeLeft: timeLeft,
-                shieldLevel: shieldLevel,
-                extraCash: extraCash,
-                total: total,
+                ...result,
+                diffName: levelMgr.getDifficultyName(),
                 cheated: false,
             };
         }
@@ -780,19 +1092,28 @@ class ScoreScreen {
             ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatMetrics.width / 2, 40 * SCALE);
         } else {
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            let y = 25 * SCALE;
+            let y = 20 * SCALE;
+            const d = this.scoreData;
             const items = [
-                ["Base Score:", this.scoreData.baseScore],
-                ["Time left:", this.scoreData.timeLeft],
-                ["Shield level:", this.scoreData.shieldLevel],
-                ["Extra cash:", this.scoreData.extraCash],
-                ["Total score:", this.scoreData.total],
+                ["Kills & Waves:", d.killScore],
+                ["Time Bonus:", d.timeBonus],
+                ["Shield Bonus:", d.shieldBonus],
+                ["Cash Bonus:", d.cashBonus],
+                ["", ""],
+                ["Subtotal:", d.subtotal],
+                [`${d.diffName} (x${d.multiplier}):`, ""],
+                ["TOTAL SCORE:", d.total],
             ];
 
             for (const [label, value] of items) {
-                const line = `${label.padEnd(20, ' ')} ${value.toString().padStart(8, ' ')}`;
+                if (label === "" && value === "") {
+                    y += 3 * SCALE;
+                    continue;
+                }
+                const valStr = value !== "" ? value.toString().padStart(8, ' ') : "";
+                const line = `${label.padEnd(22, ' ')} ${valStr}`;
                 ctx.fillText(line, SCREEN_WIDTH / 4, y);
-                y += 8 * SCALE;
+                y += 6 * SCALE;
             }
         }
 

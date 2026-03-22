@@ -14,7 +14,7 @@ const SCREEN_HEIGHT = ORIG_HEIGHT * SCALE;
 // We remap to 0-based coords: x in [0,159], y in [0,99]
 // Player movement area: y in [75, 95] (bottom quarter, above HUD at y=96)
 const PLAYER_MIN_Y = 75;
-const PLAYER_MAX_Y = 90;  // bottom of ship stays above HUD separator at y=91
+const PLAYER_MAX_Y = 84;  // bottom of ship stays above HUD separator at y=85
 const PLAYER_MIN_X = 0;
 const PLAYER_MAX_X = 159;
 
@@ -61,18 +61,18 @@ const SHOP_ITEMS = [
     ["Exit the shop!", 0],
     ["1-point shield recharge", 50],
     ["Extra bullet", 100],
-    ["Double Cannon (2)", 250],
-    ["Triple Cannon (3)", 400],
-    ["Quadruple Cannon (4)", 500],
-    ["Rapid-Fire Unit", 1000],
-    ["Homing Missiles (addon)", 1000],
-    ["Dual Plasma Cannon (5)", 1250],
-    ["New Ship: Heavy Destroyer", 1500],
-    ["Golden Arches (6)", 1750],
-    ["New Ship: The Phoenix", 2000],
-    ["Triple Plasma (7)", 2500],
-    ["Deluxe Plasma (8)", 3000],
-    ["Bombs x3", 500],
+    ["Double Cannon (2)", 500],
+    ["Triple Cannon (3)", 1000],
+    ["Quadruple Cannon (4)", 1500],
+    ["Rapid-Fire Unit", 2500],
+    ["Homing Missiles (addon)", 2000],
+    ["Dual Plasma Cannon (5)", 3000],
+    ["New Ship: Heavy Destroyer", 3500],
+    ["Golden Arches (6)", 4000],
+    ["New Ship: The Phoenix", 5000],
+    ["Triple Plasma (7)", 6000],
+    ["Deluxe Plasma (8)", 8000],
+    ["Bombs x3", 750],
 ];
 
 // Bomb settings
