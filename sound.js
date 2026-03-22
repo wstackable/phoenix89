@@ -372,14 +372,9 @@ class SoundManager {
         }
 
         try {
-            // Reuse preloaded Audio element for menu music (already buffered)
-            if (type === 'menu' && this._preloadedMenu) {
-                this.musicAudio = this._preloadedMenu;
-                this._preloadedMenu = null;  // only reuse once
-                this.musicAudio.currentTime = 0;
-            } else {
-                this.musicAudio = new Audio(src);
-            }
+            // Use preloaded blob URL if available (already in memory — instant)
+            const blobUrl = this._blobUrls && this._blobUrls[src];
+            this.musicAudio = new Audio(blobUrl || src);
             this.musicAudio.volume = 0.4;
             if (type === 'menu') {
                 this.musicAudio.loop = true;
@@ -484,15 +479,45 @@ class SoundManager {
             [this.gameplayTrackNames[i], this.gameplayTrackNames[j]] = [this.gameplayTrackNames[j], this.gameplayTrackNames[i]];
         }
 
-        // Preload menu music so it's cached and plays instantly on first interaction.
-        // We create a hidden Audio element with preload="auto" — the browser will
-        // start downloading the file immediately, even before the user interacts.
-        if (this.menuMusicFile) {
-            this._preloadedMenu = new Audio(this.menuMusicFile);
-            this._preloadedMenu.preload = 'auto';
-            this._preloadedMenu.volume = 0;  // silent — just for caching
-            this._preloadedMenu.load();       // explicitly start buffering
-        }
+        // Blob URL cache — filled by preloadAllMusic()
+        this._blobUrls = {};
+    }
+
+    /**
+     * Preload menu music via fetch() so it plays instantly on first interaction.
+     * fetch() isn't blocked by autoplay policy — downloads immediately on page load.
+     * Returns a Promise that resolves when menu music is cached.
+     */
+    preloadMenuMusic() {
+        if (!this.menuMusicFile) return Promise.resolve();
+
+        return fetch(this.menuMusicFile)
+            .then(r => r.blob())
+            .then(blob => {
+                this._blobUrls[this.menuMusicFile] = URL.createObjectURL(blob);
+            })
+            .catch(() => {
+                // Network error or file:// protocol — Audio element will load normally
+            });
+    }
+
+    /**
+     * Background-preload gameplay tracks after the game starts.
+     * Downloads one at a time to avoid saturating bandwidth during gameplay.
+     */
+    preloadGameplayTracks() {
+        let i = 0;
+        const next = () => {
+            if (i >= this.gameplayTracks.length) return;
+            const file = this.gameplayTracks[i++];
+            if (this._blobUrls[file]) { next(); return; }  // already cached
+            fetch(file)
+                .then(r => r.blob())
+                .then(blob => { this._blobUrls[file] = URL.createObjectURL(blob); })
+                .catch(() => {})
+                .finally(() => next());
+        };
+        next();
     }
 }
 
@@ -506,9 +531,9 @@ window.soundManager.setMusicFiles([
     { name: "Sherlock Holmes Anthem",   file: "music/Chiptune Sherlock Holmes Anthem.mp3",  isMenu: false },
     { name: "Darkstream Runner",        file: "music/Darkstream Runner Chiptune.mp3",       isMenu: false },
     { name: "Epic Space Battle",        file: "music/Epic Space Battle.mp3",                isMenu: false },
-    { name: "Mountain Climbing",        file: "music/Mountain Climbing.wav",                isMenu: false },
+    { name: "Mountain Climbing",        file: "music/Mountain Climbing.mp3",                isMenu: false },
     { name: "Slimey Fox Arcade",        file: "music/Slimey Fox Arcade Games.mp3",          isMenu: false },
-    { name: "Space after Dark",         file: "music/Space after Dark.wav",                 isMenu: false },
+    { name: "Space after Dark",         file: "music/Space after Dark.mp3",                 isMenu: false },
 ]);
 
 // Initialize audio on first user interaction

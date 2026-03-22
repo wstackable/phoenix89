@@ -16,6 +16,7 @@ const STATE_PAUSED = "paused";
 const STATE_DEATH_ANIM = "death_anim";
 const STATE_SECRET_HANGAR = "secret_hangar";
 const STATE_CHANGELOG = "changelog";
+const STATE_LOADING = "loading";
 
 // ─── Star Field Background ─────────────────────────────────
 
@@ -433,8 +434,10 @@ class Game {
         this.canvas = canvas;
         this.ctx = ctx;
 
-        // Game state
-        this.state = STATE_TITLE;
+        // Game state — start in loading screen
+        this.state = STATE_LOADING;
+        this._loadProgress = 0;
+        this._loadTotal = 0;
         this.running = true;
         this.logicCounter = 0;
 
@@ -504,10 +507,15 @@ class Game {
     }
 
     start() {
-        this.sound.ensureAudioContext();
-        this.sound.startMenuMusic();
         this._lastFrameTime = 0;
+        // Start the render loop immediately (shows loading screen)
         requestAnimationFrame(this._gameLoop);
+
+        // Only preload menu music (~5MB) — fast enough for the loading screen.
+        // Gameplay tracks are preloaded in the background after the player starts.
+        this.sound.preloadMenuMusic().then(() => {
+            this._loadComplete = true;
+        });
     }
 
     _gameLoop = (timestamp) => {
@@ -533,6 +541,20 @@ class Game {
         // Prevent Tab from changing browser focus when typing feedback
         if (this.state === STATE_FEEDBACK && key === 'Tab') {
             event.preventDefault();
+        }
+
+        // Loading screen: wait for completion, then any key starts the game
+        if (this.state === STATE_LOADING) {
+            if (this._loadComplete) {
+                this.state = STATE_TITLE;
+                // First user gesture — unlock audio and start menu music
+                this.sound.ensureAudioContext();
+                this._audioUnlocked = true;
+                this.sound.startMenuMusic();
+                // Start background-preloading gameplay tracks (one at a time)
+                this.sound.preloadGameplayTracks();
+            }
+            return;
         }
 
         // Initialize audio on first interaction (browser blocks autoplay
@@ -1046,6 +1068,8 @@ class Game {
     // ─── Update Logic ──────────────────────────────────────
 
     _update() {
+        if (this.state === STATE_LOADING) return;
+
         // Tick secret S-key timer
         if (this.secretSTimer > 0) {
             this.secretSTimer--;
@@ -1238,7 +1262,10 @@ class Game {
         const ctx = this.ctx;
         const theme = this.spriteMgr.theme;
 
-        if (this.state === STATE_TITLE) {
+        if (this.state === STATE_LOADING) {
+            this._drawLoadingScreen(ctx);
+
+        } else if (this.state === STATE_TITLE) {
             this.titleScreen.draw(ctx);
 
         } else if (this.state === STATE_PLAYING) {
@@ -1416,6 +1443,48 @@ class Game {
             ctx.moveTo(px, py);
             ctx.lineTo(endX, endY);
             ctx.stroke();
+        }
+    }
+
+    _drawLoadingScreen(ctx) {
+        // LCD-green background
+        ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        const fg = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+
+        // Border (matches title screen)
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
+
+        // Title (same bold font as title screen)
+        ctx.fillStyle = fg;
+        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+        ctx.textBaseline = 'alphabetic';
+        const title = "PHOENIX 89";
+        const tw = ctx.measureText(title).width;
+        ctx.fillText(title, (SCREEN_WIDTH - tw) / 2, 12 * SCALE);
+
+        // Subtitle
+        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const subtitle = "Claude Edition 1.57";
+        const stw = ctx.measureText(subtitle).width;
+        ctx.fillText(subtitle, (SCREEN_WIDTH - stw) / 2, 16 * SCALE);
+
+        ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+        if (this._loadComplete) {
+            // Loading done — blinking prompt
+            const prompt = "Press any key to start";
+            const pw = ctx.measureText(prompt).width;
+            if (Math.floor(Date.now() / 500) % 2 === 0) {
+                ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.50);
+            }
+        } else {
+            // Still loading
+            const loadText = "Loading...";
+            const ltw = ctx.measureText(loadText).width;
+            ctx.fillText(loadText, (SCREEN_WIDTH - ltw) / 2, SCREEN_HEIGHT * 0.50);
         }
     }
 

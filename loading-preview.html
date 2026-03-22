@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Loading Screen Preview</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: monospace;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="c" width="640" height="560"></canvas>
+    <script>
+        const SCALE = 4;
+        const SCREEN_WIDTH = 640;
+        const SCREEN_HEIGHT = 560;
+        const COLOR_BG = [202, 211, 185];
+        const COLOR_FG = [43, 63, 29];
+
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+
+        let loadComplete = false;
+        // Simulate: loading for 2s, then "press any key" for 3s, then loop
+        let timer = 0;
+
+        function draw() {
+            ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            const fg = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+
+            // Border
+            ctx.strokeStyle = fg;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
+
+            // Title
+            ctx.fillStyle = fg;
+            ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+            ctx.textBaseline = 'alphabetic';
+            const title = "PHOENIX 89";
+            const tw = ctx.measureText(title).width;
+            ctx.fillText(title, (SCREEN_WIDTH - tw) / 2, 12 * SCALE);
+
+            // Subtitle
+            ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            const subtitle = "Claude Edition 1.57";
+            const stw = ctx.measureText(subtitle).width;
+            ctx.fillText(subtitle, (SCREEN_WIDTH - stw) / 2, 16 * SCALE);
+
+            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            if (loadComplete) {
+                const prompt = "Press any key to start";
+                const pw = ctx.measureText(prompt).width;
+                if (Math.floor(Date.now() / 500) % 2 === 0) {
+                    ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.50);
+                }
+            } else {
+                const loadText = "Loading...";
+                const ltw = ctx.measureText(loadText).width;
+                ctx.fillText(loadText, (SCREEN_WIDTH - ltw) / 2, SCREEN_HEIGHT * 0.50);
+            }
+        }
+
+        function animate() {
+            timer++;
+            if (timer === 120) loadComplete = true;   // ~2s at 60fps
+            if (timer === 300) { loadComplete = false; timer = 0; } // reset after 3s
+            draw();
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>

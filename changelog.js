@@ -6,6 +6,15 @@
 
 const CHANGELOG = [
     {
+        version: "1.57",
+        date: "Mar 2026",
+        changes: [
+            "Loading screen with progress bar — preloads all music",
+            "Press any key to start prompt after loading",
+            "All audio tracks cached as blobs for instant playback",
+        ]
+    },
+    {
         version: "1.56",
         date: "Mar 2026",
         changes: [
