@@ -31,6 +31,16 @@
 <body>
     <canvas id="gameCanvas" width="640" height="560"></canvas>
 
+    <!-- Firebase SDK (leaderboard) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script>
+        firebase.initializeApp({
+            databaseURL: "https://phoenix89-scores-default-rtdb.firebaseio.com"
+        });
+        window.firebaseDB = firebase.database();
+    </script>
+
     <!-- Load scripts in order -->
     <script src="economy.js"></script>
     <script src="constants.js"></script>

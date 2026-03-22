@@ -1036,50 +1036,48 @@ class HighScoreScreen {
     }
 
     _submitGlobalScore(name, score, difficulty) {
-        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeAFpn0ZtcWkWY1BJumSuGxOcxbpcuvPsUoLGu_ppA3Flr7Ew/formResponse";
-        const params = new URLSearchParams();
-        params.append("entry.527207579", name);
-        params.append("entry.903331487", score.toString());
-        params.append("entry.173028998", this._getDiffName(difficulty));
-
-        fetch(formUrl, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: params.toString(),
-        }).catch(() => {});
+        // Push score to Firebase Realtime Database
+        if (!window.firebaseDB) return;
+        const ref = window.firebaseDB.ref('scores');
+        ref.push({
+            name: name,
+            score: score,
+            difficulty: this._getDiffName(difficulty),
+            timestamp: Date.now(),
+        }).then(() => {
+            // Re-fetch immediately so the player sees their score
+            this.fetchGlobalScores();
+        }).catch((err) => {
+            console.warn("Firebase submit failed:", err);
+        });
     }
 
     fetchGlobalScores() {
-        // Don't fetch more than once every 30 seconds
-        const now = Date.now();
-        if (now - this.lastFetchTime < 30000 && this.globalScores.length > 0) return;
+        if (!window.firebaseDB) {
+            this.loadingGlobal = false;
+            return;
+        }
 
         this.loadingGlobal = true;
-        this.lastFetchTime = now;
-        const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxGVgr1ZW6tjTrrmSy414-B_GIwjS3f7KGWuVRYW1RcS_Iq9pfrgAJ9RUp-gZLHEtx9kSuYye31EQ0/pub?gid=0&single=true&output=tsv&cachebust=" + now;
 
-        fetch(sheetUrl)
-            .then(r => r.text())
-            .then(csv => {
-                const rows = csv.trim().split('\n').slice(1); // skip header
+        // Query top 8 scores, ordered by score descending
+        const ref = window.firebaseDB.ref('scores');
+        ref.orderByChild('score').limitToLast(8).once('value')
+            .then(snapshot => {
                 const parsed = [];
-                for (const row of rows) {
-                    // TSV: Timestamp, Name, Score, Difficulty
-                    const cols = row.split('\t');
-                    if (cols.length >= 3) {
-                        const name = (cols[1] || "???").replace(/"/g, '').trim();
-                        const score = parseInt(cols[2], 10) || 0;
-                        const diff = (cols[3] || "").replace(/"/g, '').trim();
-                        parsed.push([name, score, diff]);
+                snapshot.forEach(child => {
+                    const d = child.val();
+                    if (d && d.name && d.score > 0) {
+                        parsed.push([d.name, d.score, d.difficulty || ""]);
                     }
-                }
-                // Sort by score descending, keep top 8
+                });
+                // Firebase limitToLast returns ascending; reverse for descending
                 parsed.sort((a, b) => b[1] - a[1]);
                 this.globalScores = parsed.slice(0, 8);
                 this.loadingGlobal = false;
             })
-            .catch(() => {
+            .catch((err) => {
+                console.warn("Firebase fetch failed:", err);
                 this.loadingGlobal = false;
             });
     }
