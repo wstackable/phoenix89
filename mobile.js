@@ -21,51 +21,84 @@ const IS_TOUCH_DEVICE = ('ontouchstart' in window) || (navigator.maxTouchPoints 
 
 function setupResponsiveCanvas(canvas) {
     const resize = () => {
-        const dpr = window.devicePixelRatio || 1;
-        const viewW = window.innerWidth;
-        const viewH = window.innerHeight;
+        // Use visualViewport on iOS Safari to get real available space
+        // (excludes Safari's toolbar/tab bar)
+        const vv = window.visualViewport;
+        const viewW = vv ? vv.width : window.innerWidth;
+        const viewH = vv ? vv.height : window.innerHeight;
 
-        // Game aspect ratio
-        const gameAspect = SCREEN_WIDTH / SCREEN_HEIGHT;  // 640/560 ≈ 1.143
+        // Game aspect ratio: 640/560 ≈ 1.143 (nearly square)
+        const gameAspect = SCREEN_WIDTH / SCREEN_HEIGHT;
         const viewAspect = viewW / viewH;
 
         let displayW, displayH;
         if (viewAspect > gameAspect) {
-            // Window is wider — fit to height
+            // Viewport is wider than game — fit to height, center horizontally
             displayH = viewH;
             displayW = viewH * gameAspect;
         } else {
-            // Window is taller — fit to width
+            // Viewport is taller than game — fit to width
             displayW = viewW;
             displayH = viewW / gameAspect;
         }
 
-        // On mobile, use full viewport; on desktop, cap at native size
-        if (!IS_TOUCH_DEVICE) {
+        if (IS_TOUCH_DEVICE) {
+            // Fill as much of the screen as possible
+            canvas.style.width = `${Math.floor(displayW)}px`;
+            canvas.style.height = `${Math.floor(displayH)}px`;
+
+            // High-DPI: increase internal resolution for crisp pixels
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = SCREEN_WIDTH * dpr;
+            canvas.height = SCREEN_HEIGHT * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        } else {
+            // Desktop: cap at native 640x560, no DPR scaling
             displayW = Math.min(displayW, SCREEN_WIDTH);
             displayH = Math.min(displayH, SCREEN_HEIGHT);
-        }
-
-        canvas.style.width = `${Math.floor(displayW)}px`;
-        canvas.style.height = `${Math.floor(displayH)}px`;
-
-        // High-DPI: scale internal resolution for sharpness on mobile
-        if (IS_TOUCH_DEVICE) {
-            canvas.width = SCREEN_WIDTH * Math.min(dpr, 2);
-            canvas.height = SCREEN_HEIGHT * Math.min(dpr, 2);
-            const ctx = canvas.getContext('2d');
-            ctx.setTransform(Math.min(dpr, 2), 0, 0, Math.min(dpr, 2), 0, 0);
+            canvas.style.width = `${Math.floor(displayW)}px`;
+            canvas.style.height = `${Math.floor(displayH)}px`;
         }
     };
 
     window.addEventListener('resize', resize);
+    // visualViewport resize fires when Safari toolbar shows/hides
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resize);
+    }
     window.addEventListener('orientationchange', () => {
-        setTimeout(resize, 100);
+        // iOS needs a delay after orientation change
+        setTimeout(resize, 50);
+        setTimeout(resize, 200);
+        setTimeout(resize, 500);
     });
     resize();
 }
 
-// ─── Landscape Orientation Lock + Rotate Prompt ───────────
+// ─── Fullscreen + Orientation ─────────────────────────────
+
+function setupFullscreen(canvas) {
+    if (!IS_TOUCH_DEVICE) return;
+
+    // Request fullscreen on first user tap to hide Safari toolbar/tab bar
+    let fullscreenRequested = false;
+    const requestFS = () => {
+        if (fullscreenRequested) return;
+        fullscreenRequested = true;
+
+        const el = document.documentElement;
+        const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (rfs) {
+            rfs.call(el).catch(() => {});
+        }
+
+        // iOS Safari doesn't support Fullscreen API, so also try scrolling to hide toolbar
+        window.scrollTo(0, 1);
+    };
+
+    document.addEventListener('touchstart', requestFS, { once: true });
+}
 
 function setupOrientationHandling() {
     if (!IS_TOUCH_DEVICE) return;
@@ -659,6 +692,7 @@ function initMobile(game) {
 
     setupResponsiveCanvas(game.canvas);
     setupOrientationHandling();
+    setupFullscreen(game.canvas);
 
     const controls = new MobileControls(game);
     return controls;
