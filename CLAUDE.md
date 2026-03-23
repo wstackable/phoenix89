@@ -1,4 +1,41 @@
-# Phoenix 89, Claude Edition 1.1 — Project Documentation
+# Phoenix 89 — Project Documentation
+
+## Operating Principles
+
+These rules govern how Claude works on this project:
+
+### 1. Plan Before Building
+- For any task with 3+ steps, plan first before writing code
+- Break the problem into clear steps, call out assumptions
+- If something breaks mid-task, STOP and re-plan
+
+### 2. Verification Before Done
+- Never declare something complete without tracing through the logic
+- For mobile changes: mentally walk through the full user flow on a phone
+- For UI changes: verify desktop path is unchanged (check IS_TOUCH_DEVICE guards)
+- Ask: "Would a staff engineer approve this?"
+
+### 3. Version & Changelog Discipline
+- Any batch of changes = update version string + changelog BEFORE presenting git commands
+- Version strings live in: ui.js (title screen), game.js (loading screen)
+- Changelog lives in: changelog.js (newest entry first)
+- Always ask Will: "new version or add to current?"
+
+### 4. Autonomous Bug Fixing
+- When given a bug report: investigate root cause, fix it, verify it
+- Don't ask for hand-holding — use evidence (code traces, logic walkthrough)
+- Point at specific lines and explain the fix
+
+### 5. Simplicity First
+- Prefer the simplest solution that fully solves the problem
+- All mobile changes must be guarded by IS_TOUCH_DEVICE — desktop stays identical
+- No temporary hacks. Find root causes.
+
+### 6. iOS Safari Gotchas (learned the hard way)
+- AudioContext gets suspended aggressively — always call resume() on user interaction
+- Virtual keyboard only appears when input.focus() is called synchronously inside a touch handler (no setTimeout)
+- Fullscreen API does not work — "Add to Home Screen" is the only workaround for hiding Safari UI
+- DPR scaling creates huge canvases (iPhone 3x = 1920×1680) — keep canvas at native 640×560
 
 ## What This Is
 
@@ -45,14 +82,16 @@ Phoenix TI-89 Game/                  # Root project folder
 - Pure HTML5 Canvas 2D — no frameworks, no build step, no dependencies
 - Single `index.html` loads all JS files via `<script>` tags in order
 - OffscreenCanvas for sprite caching and color tinting
-- requestAnimationFrame game loop at 60fps, game logic at 30fps (LOGIC_FRAMES=2)
+- Time-based game loop: requestAnimationFrame with accumulator at 30fps logic rate
 - Procedural sound synthesis via Web Audio API
-- localStorage for high score persistence
+- Firebase Realtime Database for global leaderboard (per-difficulty, top 25)
+- Nipplejs library (CDN) for mobile virtual joystick
+- `mobile.js` handles all touch input — only activates when `IS_TOUCH_DEVICE` is true
 
 ## Script Load Order (matters — no modules)
 
 ```
-economy.js → constants.js → sprites.js → sound.js → player.js → weapons.js → enemies.js → levels.js → ui.js → game.js
+economy.js → constants.js → sprites.js → sound.js → player.js → weapons.js → enemies.js → levels.js → changelog.js → ui.js → game.js → nipplejs (CDN) → mobile.js
 ```
 
 All files share the global scope. Constants defined in earlier files are available to later files. Economy.js must load first since constants.js references `ECONOMY.shopItems`.
@@ -215,7 +254,9 @@ The enemies array for the megaboss level is:
 | sound.js | 492 | Procedural audio synthesis |
 | economy.js | 118 | Centralized economy tuning values |
 | constants.js | 115 | Screen size, weapons, ships, difficulty constants |
-| index.html | 61 | Canvas setup, script loading |
+| changelog.js | ~80 | Version history data for in-game changelog |
+| mobile.js | ~750 | Touch controls, joystick, menu tap handlers, sidebar UI |
+| index.html | ~100 | Canvas setup, script loading, hidden mobile inputs |
 
 ## Git Workflow
 
@@ -225,11 +266,13 @@ Will pushes from his own terminal (authenticated via GitHub web). When committin
 
 ## Version Number
 
-**IMPORTANT**: Each time we reach a push point, increment the version number in `ui.js` (line ~406):
-```javascript
-const subtitle = "Claude Edition X.XX";
-```
-Current version: **1.53**. Increment by 0.01 each push (1.54, 1.55, 1.56, etc.).
+**IMPORTANT**: Each time we reach a push point, update the version number in TWO places:
+- `ui.js` — title screen subtitle
+- `game.js` — loading screen subtitle
+
+Also add a changelog entry in `changelog.js` (newest first).
+
+Current version: **1.60**. Increment by 0.01 each push. Always ask Will whether to create a new version or add to the current one.
 
 ## ASM Reference Files
 
@@ -318,14 +361,25 @@ The game was originally ported from TI-89 assembly to Python/Pygame. Key feature
 
 The web port translates all of this from Python/Pygame to HTML5 Canvas + vanilla JS.
 
-## Current State (as of March 2026)
+## Current State (as of v1.60, March 2026)
 
-The game is fully playable with all 13 levels, working boss fights including the multi-phase Megaboss finale, 6 ships (3 secret), full economy system, and shop progression. The latest commit on main includes the ASM mechanics overhaul with all boss AI fixes, economy config extraction, double cash bug fixes, and expanded game window.
+The game is fully playable with all 13 levels, working boss fights including the multi-phase Megaboss finale, 6 ships (3 secret), full economy system, shop progression, and Firebase global leaderboard. Mobile phone/tablet support is implemented with virtual joystick, touch menus, and sidebar controls (radio button, thumbstick cue).
+
+### Mobile Architecture
+- `IS_TOUCH_DEVICE` global: `('ontouchstart' in window) || (navigator.maxTouchPoints > 0)`
+- All mobile code guarded by this flag — desktop rendering/input completely untouched
+- `mobile.js` creates: joystick zone (left half), FIRE/BOMB/MEGA/PAUSE buttons, sidebar elements
+- Canvas stays at native 640×560 on mobile (no DPR scaling — iPhone 3x would make it 1920×1680)
+- CSS `image-rendering: pixelated` handles upscaling to fill screen
+- Game aspect ratio 640/560 ≈ 1.14:1 vs phone ~2:1 means black side bars are unavoidable
+- Time-based accumulator game loop ensures consistent 30fps logic regardless of frame drops
+- Hidden HTML inputs (`mobileNameInput`, `mobileFeedbackInput`) trigger iOS virtual keyboard for text entry
+- Text input on mobile: keyboard events are skipped in handleEvent() to avoid double characters
 
 ## What's Next / Known Issues
 
-- GitHub connector for Claude Cowork doesn't provide push/pull (SSH blocked in sandbox, no MCP write tools). Will pushes from his terminal.
-- Will plans to transition to Claude Code for better git integration
+- Will pushes git from his terminal
 - Economy values in economy.js are actively being tuned through playtesting
-- The `handleMegabossCenterDestroyed()` function in enemies.js (~line 1528) is dead code — never called, replaced by the enraged mode system. Can be removed.
-- Levels 9-13 income hasn't been precisely audited (special stages with variable enemy counts)
+- iOS Safari tabs/URL bar cannot be hidden programmatically — "Add to Home Screen" is the workaround
+- The `handleMegabossCenterDestroyed()` function in enemies.js is dead code (replaced by enraged mode)
+- Levels 9-13 income hasn't been precisely audited
