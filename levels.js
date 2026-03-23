@@ -895,11 +895,9 @@ class LevelManager {
         for (const e of enemies) {
             if (e.hp < 32000) {
                 e.hp = Math.max(e.hp, Math.floor(e.hp * hpMult));
-                // Update maxHp if set (used for Megaboss phase calculation)
-                if (e.maxHp !== undefined) {
-                    e.maxHp = e.hp;
-                }
             }
+            // Always set maxHp for scoring (and megaboss phase calc)
+            e.maxHp = e.hp;
         }
 
         enemyManager.enemies = enemies;
@@ -919,37 +917,56 @@ class LevelManager {
         return this.timeBonusCounter;
     }
 
-    // Difficulty multipliers: Beginner x1, Intermediate x1.5, Hard x2, Expert x3
     getDifficultyMultiplier() {
-        const mults = { 1: 1, 2: 1.5, 3: 2, 4: 3 };
-        return mults[this.difficulty] || 1;
+        return ECONOMY.diffScoreMultiplier[this.difficulty] || 1;
     }
 
     getDifficultyName() {
         return { 1: "Beginner", 2: "Intermediate", 3: "Hard", 4: "Expert" }[this.difficulty] || "Beginner";
     }
 
-    // Running score for HUD display (starts at 0, builds from kills/waves)
+    // Running score for HUD display
     getRunningScore(player, enemyMgr) {
         if (player.cheated) return 0;
         return enemyMgr ? enemyMgr.scorePoints : 0;
     }
 
-    // Final score calculation with breakdown
-    // Simple formula: (kill points + cash bonus) × difficulty multiplier
+    // Final score calculation with full breakdown
     calculateScore(player, enemyMgr) {
         if (player.cheated) {
-            return { killCount: 0, killScore: 0, cashBonus: 0, subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0 };
+            return {
+                killCount: 0, killScore: 0, wavesCleared: 0, perfectWaves: 0,
+                waveBonus: 0, levelReached: 0, levelBonus: 0, cashBonus: 0,
+                subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0
+            };
         }
 
         const killCount = enemyMgr ? enemyMgr.killCount : 0;
         const killScore = enemyMgr ? enemyMgr.scorePoints : 0;
+
+        // Wave clear bonuses
+        const wavesCleared = enemyMgr ? enemyMgr.wavesCleared : 0;
+        const perfectWaves = enemyMgr ? enemyMgr.perfectWaves : 0;
+        const normalWaveBonus = (wavesCleared - perfectWaves) * ECONOMY.waveClearBonus;
+        const perfectWaveBonus = perfectWaves * ECONOMY.waveClearBonus * ECONOMY.perfectWaveMultiplier;
+        const waveBonus = normalWaveBonus + perfectWaveBonus;
+
+        // Level reached bonus
+        const levelReached = Math.max(1, this.currentLevelGroup);
+        const levelBonus = levelReached * ECONOMY.levelReachedBonus;
+
+        // Cash bonus
         const cashBonus = Math.floor(player.cash / 10);
-        const subtotal = killScore + cashBonus;
+
+        const subtotal = killScore + waveBonus + levelBonus + cashBonus;
         const multiplier = this.getDifficultyMultiplier();
         const diffName = this.getDifficultyName();
         const total = Math.floor(subtotal * multiplier);
 
-        return { killCount, killScore, cashBonus, subtotal, multiplier, diffName, total };
+        return {
+            killCount, killScore, wavesCleared, perfectWaves,
+            waveBonus, levelReached, levelBonus, cashBonus,
+            subtotal, multiplier, diffName, total
+        };
     }
 }

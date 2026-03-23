@@ -6,6 +6,20 @@
 
 const CHANGELOG = [
     {
+        version: "1.59",
+        date: "Mar 2026",
+        changes: [
+            "New scoring system: HP-based kill points, wave clear bonuses, perfect wave bonuses, level reached bonus",
+            "Scorecard redesigned to show full breakdown with level/wave where you died",
+            "High scores now separated by difficulty with tabs and scrolling (top 25 per difficulty)",
+            "Difficulty multipliers updated: Beginner x1, Intermediate x1.5, Hard x2.5, Expert x4",
+            "Secret Hangar: pick ship first, then choose difficulty on separate screen",
+            "Fixed HUD level/wave display (was showing L2-W1 on first level)",
+            "Fixed homing missiles not firing with ultimate weapons (bullet cap was blocking them)",
+            "Removed 'Claude Edition' branding from main menu, victory screen, and about",
+        ]
+    },
+    {
         version: "1.58",
         date: "Mar 2026",
         changes: [

@@ -217,7 +217,9 @@ class EnemyManager {
         this.enemiesRemaining = 0;
         this.killCount = 0;      // running kill counter for score display
         this.scorePoints = 0;    // running score from kills
-        this.cycleCounter = 0;  // global frame counter
+        this.wavesCleared = 0;   // total waves completed
+        this.perfectWaves = 0;   // waves cleared without taking damage
+        this.cycleCounter = 0;   // global frame counter
         this.difficulty = DIFF_BEGINNER;
         this.currentLevel = 1;   // current level group (1-9+) for economy scaling
         this.xyData = [];        // coordinate table for formation enemies
@@ -1476,7 +1478,9 @@ class EnemyManager {
         e.alive = false;
         this.enemiesRemaining -= 1;
         this.killCount += 1;
-        this.scorePoints += ECONOMY.pointsPerSmallKill;
+        // HP-based scoring: tougher enemies = more points
+        const hp = e.maxHp || 1;
+        this.scorePoints += Math.ceil(hp * ECONOMY.pointsPerHp);
     }
 
     _largeExplosionFinished(e, ws) {
@@ -1488,26 +1492,29 @@ class EnemyManager {
         }
         e._cashDropped = true;
 
+        const hp = e.maxHp || 1;
+        const isBoss = (e.destruct === EDESTRUCT_BOSS || e.destruct === EDESTRUCT_MBC);
+
         if (ws === null) {
             e.alive = false;
             this.enemiesRemaining -= 1;
             this.killCount += 1;
-            this.scorePoints += ECONOMY.pointsPerSmallKill;
+            this.scorePoints += Math.ceil(hp * ECONOMY.pointsPerHp * (isBoss ? ECONOMY.bossHpMultiplier : 1));
             return;
         }
 
-        if (e.destruct === EDESTRUCT_BOSS || e.destruct === EDESTRUCT_MBC) {
+        if (isBoss) {
             // Boss: always drops cash, value scales with level
             const value = this._getBossDropValue();
             ws.deployCash(e.x, e.y, value);
-            this.scorePoints += ECONOMY.pointsPerBossKill;
+            this.scorePoints += Math.ceil(hp * ECONOMY.pointsPerHp * ECONOMY.bossHpMultiplier);
         } else {
             // Non-boss large: same as small enemies
             const dropDenom = this._getCashDropChance();
             if (Math.floor(Math.random() * dropDenom) === 0) {
                 ws.deployCash(e.x, e.y, this._getLevelCashValue());
             }
-            this.scorePoints += ECONOMY.pointsPerSmallKill;
+            this.scorePoints += Math.ceil(hp * ECONOMY.pointsPerHp);
         }
 
         e.alive = false;

@@ -130,6 +130,11 @@ class WeaponSystem {
     }
 
     firePlayerWeapon(player, enemies = null) {
+        // Homing missiles fire independently of bullet cap and fire cooldown
+        if (player.hasHomingMissiles && this.homingCooldown <= 0 && enemies) {
+            this._fireHomingMissile(player, enemies);
+        }
+
         if (!player.canFire()) return;
         if (this.playerBullets.length >= player.numBullets) return;
 
@@ -183,11 +188,6 @@ class WeaponSystem {
         } else if (w === WEAPON_RED_CHARGE) {
             // Red Bomber: 3 red laser pulses in fan spread (same as Brady's)
             this._fireRedFan(player);
-        }
-
-        // Homing missiles: fire alongside any weapon if addon purchased
-        if (player.hasHomingMissiles && this.homingCooldown <= 0) {
-            this._fireHomingMissile(player, enemies);
         }
 
         // Double Blastery rockets fire on their own cooldown

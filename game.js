@@ -963,7 +963,13 @@ class Game {
                 // Normal combat level - clear bullets for new wave
                 this.weaponSystem.clear();
                 this.state = STATE_PLAYING;
-                this.enemyMgr.scorePoints += 5;  // +5 per wave cleared
+
+                // Track wave completion and perfect waves
+                this.enemyMgr.wavesCleared += 1;
+                if (!this.player.tookDamageThisWave) {
+                    this.enemyMgr.perfectWaves += 1;
+                }
+                this.player.tookDamageThisWave = false;  // reset for next wave
 
                 // Sync current level to enemy manager for economy scaling
                 const curGroup = this.levelMgr.currentLevelGroup;
@@ -1540,7 +1546,7 @@ class Game {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.58";
+        const subtitle = "v1.59";
         const stw = ctx.measureText(subtitle).width;
         ctx.fillText(subtitle, (SCREEN_WIDTH - stw) / 2, 16 * SCALE);
 

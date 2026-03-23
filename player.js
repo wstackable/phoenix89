@@ -57,6 +57,7 @@ class Player {
 
         // Score tracking
         this.kills = 0;
+        this.tookDamageThisWave = false;
 
         // Visual feedback
         this.hitParticles = [];
@@ -108,6 +109,8 @@ class Player {
     }
 
     takeDamage(amount) {
+        this.tookDamageThisWave = true;
+
         // Reset mega charge on any hit (Brady and Caleb)
         if (this.shipType === SHIP_DOUBLE_BLASTERY || this.shipType === SHIP_RED_BOMBER) {
             this.megaCharge = 0;

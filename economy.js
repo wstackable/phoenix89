@@ -84,8 +84,15 @@ const ECONOMY = {
     // Above 100 → large "$$$" icon
 
     // ─── SCORING ─────────────────────────────────────────────────
-    pointsPerSmallKill: 10,
-    pointsPerBossKill: 50,
+    // Kill score scales with enemy HP so tougher enemies are worth more
+    pointsPerHp: 2,              // base points per enemy maxHp
+    bossHpMultiplier: 3,         // bosses score pointsPerHp * this
+    waveClearBonus: 25,          // points per wave cleared
+    perfectWaveMultiplier: 2,    // multiplier on wave bonus if no damage taken
+    levelReachedBonus: 100,      // flat points per level reached
+
+    // Difficulty score multipliers — higher difficulty = much bigger reward
+    diffScoreMultiplier: { 1: 1, 2: 1.5, 3: 2.5, 4: 4 },
 
     // ─── SHOP PRICES ─────────────────────────────────────────────
     // [displayName, price] — index matters (matches weapon/upgrade IDs)

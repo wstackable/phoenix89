@@ -124,8 +124,8 @@ class HUD {
 
         // Status text - below health bar with generous padding
         const textY = barY + barH + 3 * SCALE;
-        const levelNum = levelMgr.currentLevelGroup + 1;
-        const waveNum = levelMgr.waveInLevel > 0 ? levelMgr.waveInLevel : 1;
+        const levelNum = Math.max(1, levelMgr.currentLevelGroup);
+        const waveNum = Math.max(1, levelMgr.waveInLevel);
         const score = levelMgr.getRunningScore(player, enemyMgr);
         const status = `$${player.cash.toString().padStart(5, '0')}  HP:${player.shield.toString().padStart(2, '0')}  L${levelNum}-W${waveNum}  Gun:${player.weaponSelected + 1}  B:${player.bombs}  Score:${score}`;
 
@@ -434,7 +434,7 @@ class TitleScreen {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "Claude Edition 1.58";
+        const subtitle = "v1.59";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
@@ -999,9 +999,13 @@ class HighScoreScreen {
             ["---", 0], ["---", 0], ["---", 0], ["---", 0],
             ["---", 0], ["---", 0], ["---", 0], ["---", 0],
         ];
-        this.globalScores = [];
-        this.loadingGlobal = false;
-        this.lastFetchTime = 0;
+        // Per-difficulty score caches
+        this._diffTabs = [DIFF_BEGINNER, DIFF_INTERMEDIATE, DIFF_HARD, DIFF_EXPERT];
+        this._diffNames = { [DIFF_BEGINNER]: "Beginner", [DIFF_INTERMEDIATE]: "Inter.", [DIFF_HARD]: "Hard", [DIFF_EXPERT]: "Expert" };
+        this._diffKeys = { [DIFF_BEGINNER]: "beginner", [DIFF_INTERMEDIATE]: "intermediate", [DIFF_HARD]: "hard", [DIFF_EXPERT]: "expert" };
+        this._scoresByDiff = {};  // { "beginner": [...], "intermediate": [...], ... }
+        this._loadingByDiff = {};
+        this.viewingTab = DIFF_BEGINNER;
         this.difficulty = DIFF_BEGINNER;
         this.enteringName = false;
         this.newScore = 0;
@@ -1009,6 +1013,8 @@ class HighScoreScreen {
         this.nameInput = "";
         this.maxNameLen = 12;
         this.blinkTimer = 0;
+        this.scrollOffset = 0;
+        this.maxVisible = 10;
         this._load();
     }
 
@@ -1018,68 +1024,67 @@ class HighScoreScreen {
             if (saved) {
                 this.scores = JSON.parse(saved);
             }
-        } catch (e) {
-            // Use defaults
-        }
+        } catch (e) {}
     }
 
     _save() {
         try {
             localStorage.setItem('phoenixHighScores', JSON.stringify(this.scores));
-        } catch (e) {
-            // Ignore save errors
-        }
+        } catch (e) {}
     }
 
     _getDiffName(diff) {
         return { 1: "Beginner", 2: "Intermediate", 3: "Hard", 4: "Expert" }[diff] || "Beginner";
     }
 
+    _getDiffKey(diff) {
+        return this._diffKeys[diff] || "beginner";
+    }
+
     _submitGlobalScore(name, score, difficulty) {
-        // Push score to Firebase Realtime Database
         if (!window.firebaseDB) return;
-        const ref = window.firebaseDB.ref('scores');
+        const diffKey = this._getDiffKey(difficulty);
+        const ref = window.firebaseDB.ref('scores/' + diffKey);
         ref.push({
             name: name,
             score: score,
-            difficulty: this._getDiffName(difficulty),
             timestamp: Date.now(),
         }).then(() => {
-            // Re-fetch immediately so the player sees their score
-            this.fetchGlobalScores();
+            this._fetchScoresForDiff(difficulty);
         }).catch((err) => {
             console.warn("Firebase submit failed:", err);
         });
     }
 
-    fetchGlobalScores() {
-        if (!window.firebaseDB) {
-            this.loadingGlobal = false;
-            return;
-        }
+    _fetchScoresForDiff(diff) {
+        if (!window.firebaseDB) return;
+        const diffKey = this._getDiffKey(diff);
+        this._loadingByDiff[diffKey] = true;
 
-        this.loadingGlobal = true;
-
-        // Query top 8 scores, ordered by score descending
-        const ref = window.firebaseDB.ref('scores');
-        ref.orderByChild('score').limitToLast(8).once('value')
+        const ref = window.firebaseDB.ref('scores/' + diffKey);
+        ref.orderByChild('score').limitToLast(25).once('value')
             .then(snapshot => {
                 const parsed = [];
                 snapshot.forEach(child => {
                     const d = child.val();
                     if (d && d.name && d.score > 0) {
-                        parsed.push([d.name, d.score, d.difficulty || ""]);
+                        parsed.push([d.name, d.score]);
                     }
                 });
-                // Firebase limitToLast returns ascending; reverse for descending
                 parsed.sort((a, b) => b[1] - a[1]);
-                this.globalScores = parsed.slice(0, 8);
-                this.loadingGlobal = false;
+                this._scoresByDiff[diffKey] = parsed.slice(0, 25);
+                this._loadingByDiff[diffKey] = false;
             })
-            .catch((err) => {
-                console.warn("Firebase fetch failed:", err);
-                this.loadingGlobal = false;
+            .catch(() => {
+                this._loadingByDiff[diffKey] = false;
             });
+    }
+
+    fetchGlobalScores() {
+        // Fetch all difficulties
+        for (const diff of this._diffTabs) {
+            this._fetchScoresForDiff(diff);
+        }
     }
 
     checkHighScore(score) {
@@ -1097,14 +1102,17 @@ class HighScoreScreen {
         this.newScore = score;
         this.newRank = rank;
         this.difficulty = difficulty || DIFF_BEGINNER;
+        this.viewingTab = difficulty || DIFF_BEGINNER;
         this.nameInput = "";
         this.blinkTimer = 0;
+        this.scrollOffset = 0;
         this.fetchGlobalScores();
     }
 
     show() {
         this.active = true;
         this.enteringName = false;
+        this.scrollOffset = 0;
         this.fetchGlobalScores();
     }
 
@@ -1119,20 +1127,32 @@ class HighScoreScreen {
                 this._save();
                 this._submitGlobalScore(name, this.newScore, this.difficulty);
                 this.enteringName = false;
-                this.fetchGlobalScores();
-                // Don't return true — show the global leaderboard first
+                this.scrollOffset = 0;
                 return false;
             } else if (event.key === 'Backspace') {
                 this.nameInput = this.nameInput.slice(0, -1);
             } else if (event.key.length === 1 && this.nameInput.length < this.maxNameLen) {
-                // Allow letters, numbers, spaces
                 const ch = event.key;
                 if (/[a-zA-Z0-9 ]/.test(ch)) {
                     this.nameInput += ch;
                 }
             }
         } else {
-            if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
+            // Tab switching with left/right
+            if (event.key === 'ArrowLeft') {
+                const idx = this._diffTabs.indexOf(this.viewingTab);
+                this.viewingTab = this._diffTabs[(idx - 1 + this._diffTabs.length) % this._diffTabs.length];
+                this.scrollOffset = 0;
+            } else if (event.key === 'ArrowRight') {
+                const idx = this._diffTabs.indexOf(this.viewingTab);
+                this.viewingTab = this._diffTabs[(idx + 1) % this._diffTabs.length];
+                this.scrollOffset = 0;
+            } else if (event.key === 'ArrowUp') {
+                this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+            } else if (event.key === 'ArrowDown') {
+                const scores = this._scoresByDiff[this._getDiffKey(this.viewingTab)] || [];
+                this.scrollOffset = Math.min(Math.max(0, scores.length - this.maxVisible), this.scrollOffset + 1);
+            } else if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
                 this.active = false;
                 return true;
             }
@@ -1149,7 +1169,7 @@ class HighScoreScreen {
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        // Border (matches main menu)
+        // Border
         ctx.strokeStyle = fg;
         ctx.lineWidth = 2;
         ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
@@ -1157,41 +1177,80 @@ class HighScoreScreen {
         ctx.fillStyle = fg;
 
         // Title
-        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+        ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
         const title = "HIGH SCORES";
         const titleW = ctx.measureText(title).width;
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 12 * SCALE);
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 8 * SCALE);
 
-        // Always show global leaderboard
-        ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-        let y = 24 * SCALE;
+        // Difficulty tabs
+        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const tabY = 15 * SCALE;
+        const tabNames = this._diffTabs.map(d => this._diffNames[d]);
+        const totalTabW = tabNames.reduce((sum, n) => sum + ctx.measureText(n).width, 0) + (tabNames.length - 1) * 6 * SCALE;
+        let tabX = SCREEN_WIDTH / 2 - totalTabW / 2;
 
-        if (this.loadingGlobal && this.globalScores.length === 0) {
+        for (let i = 0; i < this._diffTabs.length; i++) {
+            const isActive = (this._diffTabs[i] === this.viewingTab);
+            if (isActive) {
+                ctx.font = `bold ${Math.floor(10 * SCALE / 4)}px monospace`;
+            } else {
+                ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+            }
+            ctx.fillStyle = fg;
+            ctx.fillText(tabNames[i], tabX, tabY);
+            if (isActive) {
+                // Underline active tab
+                const tw = ctx.measureText(tabNames[i]).width;
+                ctx.fillRect(tabX, tabY + Math.floor(3 * SCALE), tw, 1);
+            }
+            tabX += ctx.measureText(tabNames[i]).width + 6 * SCALE;
+        }
+
+        // Score list for active tab
+        const diffKey = this._getDiffKey(this.viewingTab);
+        const scores = this._scoresByDiff[diffKey] || [];
+        const loading = this._loadingByDiff[diffKey];
+
+        ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+        ctx.fillStyle = fg;
+        let y = 22 * SCALE;
+        const lineH = 5 * SCALE;
+
+        if (loading && scores.length === 0) {
             const loadText = "Loading scores...";
             const lw = ctx.measureText(loadText).width;
             ctx.fillText(loadText, SCREEN_WIDTH / 2 - lw / 2, y);
-        } else if (this.globalScores.length === 0) {
+        } else if (scores.length === 0) {
             const emptyText = "No scores yet. Be the first!";
             const ew = ctx.measureText(emptyText).width;
             ctx.fillText(emptyText, SCREEN_WIDTH / 2 - ew / 2, y);
         } else {
-            for (let i = 0; i < this.globalScores.length; i++) {
-                const [name, score, diff] = this.globalScores[i];
-                const line = ` ${(i + 1).toString().padStart(2, ' ')}  ${name.padEnd(12, ' ')} ${score.toString().padStart(8, ' ')}  ${diff}`;
-                ctx.fillText(line, 6 * SCALE, y);
-                y += 6 * SCALE;
+            const end = Math.min(scores.length, this.scrollOffset + this.maxVisible);
+            for (let i = this.scrollOffset; i < end; i++) {
+                const [name, score] = scores[i];
+                const rank = `${(i + 1).toString().padStart(2, ' ')}`;
+                const nameStr = name.padEnd(12, ' ');
+                const scoreStr = score.toLocaleString().padStart(10, ' ');
+                ctx.fillText(`${rank}  ${nameStr} ${scoreStr}`, 6 * SCALE, y);
+                y += lineH;
+            }
+            // Scroll indicator
+            if (scores.length > this.maxVisible) {
+                ctx.font = `${Math.floor(8 * SCALE / 4)}px monospace`;
+                const scrollHint = `${this.scrollOffset + 1}-${end} of ${scores.length}`;
+                const shw = ctx.measureText(scrollHint).width;
+                ctx.fillText(scrollHint, SCREEN_WIDTH / 2 - shw / 2, y + SCALE);
             }
         }
 
         if (this.enteringName) {
-            // Name entry area at bottom
             const entryY = SCREEN_HEIGHT - 22 * SCALE;
-            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+            ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+            ctx.fillStyle = fg;
             const label = "Enter your name:";
             const lw = ctx.measureText(label).width;
             ctx.fillText(label, SCREEN_WIDTH / 2 - lw / 2, entryY);
 
-            // Input box
             const boxW = 52 * SCALE;
             const boxH = 6 * SCALE;
             const boxX = SCREEN_WIDTH / 2 - boxW / 2;
@@ -1200,21 +1259,19 @@ class HighScoreScreen {
             ctx.lineWidth = 1;
             ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-            // Name text with blinking cursor
             ctx.fillStyle = fg;
-            ctx.font = `${Math.floor(18 * SCALE / 4)}px monospace`;
+            ctx.font = `${Math.floor(16 * SCALE / 4)}px monospace`;
             const cursor = this.blinkTimer < 25 ? "_" : " ";
-            const display = this.nameInput + cursor;
-            ctx.fillText(display, boxX + 2 * SCALE, boxY + Math.floor(4.5 * SCALE));
+            ctx.fillText(this.nameInput + cursor, boxX + 2 * SCALE, boxY + Math.floor(4.5 * SCALE));
 
             ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
             const prompt = "Type your name, then press ENTER";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         } else {
-            // Viewing prompt
             ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-            const prompt = "Press ENTER to continue";
+            ctx.fillStyle = fg;
+            const prompt = "\u2190\u2192 Difficulty   \u2191\u2193 Scroll   ENTER: Back";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         }
@@ -1300,8 +1357,7 @@ class VictoryScreen {
     _buildCredits() {
         // "sprite" field: name of cached ship sprite (uses _sm suffix for small inline version)
         this._creditsLines = [
-            { text: "PHOENIX 89", size: 28, gap: 14, color: [255, 210, 50] },
-            { text: "Claude Edition", size: 14, gap: 24, color: [200, 180, 120] },
+            { text: "PHOENIX 89", size: 28, gap: 24, color: [255, 210, 50] },
             { text: "- - -  CONGRATULATIONS  - - -", size: 14, gap: 12, color: [255, 255, 180] },
             { text: "You defeated the Megaboss", size: 12, gap: 6, color: [200, 220, 255] },
             { text: "and saved the galaxy!", size: 12, gap: 30, color: [200, 220, 255] },
@@ -1592,9 +1648,15 @@ class ScoreScreen {
         this.active = true;
         const cheated = player.cheated || false;
 
+        // Track where the player died/finished
+        this.diedAtLevel = levelMgr.currentLevelGroup || 1;
+        this.diedAtWave = levelMgr.waveInLevel || 1;
+        this.playerAlive = player.alive;
+
         if (cheated) {
             this.scoreData = {
-                killCount: 0, killScore: 0, cashBonus: 0,
+                killCount: 0, killScore: 0, wavesCleared: 0, perfectWaves: 0,
+                waveBonus: 0, levelReached: 0, levelBonus: 0, cashBonus: 0,
                 subtotal: 0, multiplier: 1, diffName: "Cheater", total: 0, cheated: true,
             };
         } else {
@@ -1621,7 +1683,7 @@ class ScoreScreen {
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        // Border (matches main menu)
+        // Border
         ctx.strokeStyle = fg;
         ctx.lineWidth = 2;
         ctx.strokeRect(3 * SCALE, 2 * SCALE, SCREEN_WIDTH - 6 * SCALE, SCREEN_HEIGHT - 4 * SCALE);
@@ -1629,10 +1691,18 @@ class ScoreScreen {
         ctx.fillStyle = fg;
 
         // Title
-        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
-        const title = "GAME OVER";
+        ctx.font = `bold ${Math.floor(24 * SCALE / 4)}px monospace`;
+        const title = this.playerAlive ? "VICTORY!" : "GAME OVER";
         const titleW = ctx.measureText(title).width;
-        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 12 * SCALE);
+        ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 8 * SCALE);
+
+        // Level/Wave subtitle
+        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const locText = this.playerAlive
+            ? "Completed all levels"
+            : `Defeated at Level ${this.diedAtLevel} - Wave ${this.diedAtWave}`;
+        const locW = ctx.measureText(locText).width;
+        ctx.fillText(locText, SCREEN_WIDTH / 2 - locW / 2, 13 * SCALE);
 
         if (this.scoreData.cheated) {
             ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
@@ -1641,25 +1711,30 @@ class ScoreScreen {
             ctx.fillText(cheatText, SCREEN_WIDTH / 2 - cheatW / 2, 40 * SCALE);
         } else {
             const d = this.scoreData;
-            const fontSize = Math.floor(14 * SCALE / 4);
-            ctx.font = `${fontSize}px monospace`;
-            const leftMargin = 12 * SCALE;
-            let y = 26 * SCALE;
-            const lineH = 7 * SCALE;
+            const sm = Math.floor(11 * SCALE / 4);  // small font
+            const med = Math.floor(12 * SCALE / 4); // medium font
+            ctx.font = `${med}px monospace`;
+            const leftMargin = 8 * SCALE;
+            const valX = SCREEN_WIDTH - 10 * SCALE;  // right-align values
+            let y = 20 * SCALE;
+            const lineH = 5 * SCALE;
 
-            // Enemies Destroyed
-            ctx.fillText(`Enemies Destroyed:`, leftMargin, y);
-            y += lineH;
-            const killVal = `  ${d.killCount} (${d.killScore} pts)`;
-            ctx.fillText(killVal, leftMargin, y);
-            y += lineH + 3 * SCALE;
+            // Helper to draw a right-aligned value
+            const drawLine = (label, val) => {
+                ctx.font = `${med}px monospace`;
+                ctx.fillText(label, leftMargin, y);
+                const valStr = val.toLocaleString();
+                const vw = ctx.measureText(valStr).width;
+                ctx.fillText(valStr, valX - vw, y);
+                y += lineH;
+            };
 
-            // Cash Bonus
-            ctx.fillText(`Cash Bonus:`, leftMargin, y);
-            y += lineH;
-            const cashStr = `  $${(d.cashBonus * 10).toLocaleString()} remaining = ${d.cashBonus} pts`;
-            ctx.fillText(cashStr, leftMargin, y);
-            y += lineH + 5 * SCALE;
+            drawLine(`Enemies (${d.killCount} killed)`, d.killScore);
+            drawLine(`Waves (${d.wavesCleared} cleared, ${d.perfectWaves} perfect)`, d.waveBonus);
+            drawLine(`Level Reached (${d.levelReached})`, d.levelBonus);
+            drawLine(`Cash Remaining ($${(d.cashBonus * 10).toLocaleString()})`, d.cashBonus);
+
+            y += 2 * SCALE;
 
             // Divider
             ctx.strokeStyle = fg;
@@ -1668,18 +1743,26 @@ class ScoreScreen {
             ctx.moveTo(8 * SCALE, y);
             ctx.lineTo(SCREEN_WIDTH - 8 * SCALE, y);
             ctx.stroke();
-            y += 5 * SCALE;
+            y += 4 * SCALE;
 
             // Subtotal
-            ctx.fillText(`Subtotal: ${d.subtotal}`, leftMargin, y);
-            y += lineH;
+            drawLine(`Subtotal`, d.subtotal);
 
             // Difficulty multiplier
-            ctx.fillText(`${d.diffName} Multiplier: x${d.multiplier}`, leftMargin, y);
-            y += lineH + 5 * SCALE;
+            drawLine(`${d.diffName} Multiplier`, 0);
+            // Redraw just the value as "x1.5" format instead of number
+            y -= lineH;
+            const multStr = `x${d.multiplier}`;
+            const mw = ctx.measureText(multStr).width;
+            // Clear and redraw the value
+            ctx.fillStyle = bg;
+            ctx.fillRect(valX - 60, y - 2, 62, lineH);
+            ctx.fillStyle = fg;
+            ctx.fillText(multStr, valX - mw, y);
+            y += lineH + 4 * SCALE;
 
             // Total (bigger, centered)
-            ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+            ctx.font = `bold ${Math.floor(24 * SCALE / 4)}px monospace`;
             const totalStr = `TOTAL: ${d.total.toLocaleString()}`;
             const totalW = ctx.measureText(totalStr).width;
             ctx.fillText(totalStr, SCREEN_WIDTH / 2 - totalW / 2, y);
