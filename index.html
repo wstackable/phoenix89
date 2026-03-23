@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="screen-orientation" content="landscape">
     <title>Phoenix 89 - Web Edition</title>
     <style>
         * {
@@ -20,11 +23,26 @@
             font-family: monospace;
         }
 
+        body {
+            overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
         canvas {
             display: block;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
             border: 2px solid #333;
+        }
+
+        /* Hide canvas border on mobile for full-screen feel */
+        @media (pointer: coarse) {
+            canvas {
+                border: none;
+            }
         }
     </style>
 </head>
@@ -59,6 +77,11 @@
     <script src="changelog.js"></script>
     <script src="ui.js"></script>
     <script src="game.js"></script>
+
+    <!-- Nipplejs virtual joystick (only used on touch devices) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.2/nipplejs.min.js"></script>
+    <!-- Mobile touch controls -->
+    <script src="mobile.js"></script>
 
     <script>
         // Prevent default arrow key and space scrolling

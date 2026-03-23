@@ -17,6 +17,12 @@ const CHANGELOG = [
             "Fixed HUD level/wave display (was showing L2-W1 on first level)",
             "Fixed homing missiles not firing with ultimate weapons (bullet cap was blocking them)",
             "Removed 'Claude Edition' branding from main menu, victory screen, and about",
+            "Mobile phone and tablet support with virtual joystick and touch controls",
+            "Responsive canvas scaling for any screen size with landscape orientation lock",
+            "Touch-friendly menus: tap to navigate shop, secret hangar, high scores, etc.",
+            "Fixed bombs destroying money drops (cash pickups now preserved through bomb blasts)",
+            "Fixed high scores not prompting for name entry after game over",
+            "Removed legacy local high score list — all scores are now global via Firebase",
         ]
     },
     {

@@ -510,6 +510,9 @@ class Game {
         // Setup event listeners
         window.addEventListener('keydown', (e) => this._onKeyDown(e));
         window.addEventListener('keyup', (e) => this._onKeyUp(e));
+
+        // Mobile touch controls (no-op on desktop)
+        this.mobileControls = typeof initMobile === 'function' ? initMobile(this) : null;
     }
 
     start() {
@@ -677,9 +680,9 @@ class Game {
         } else if (this.state === STATE_SCORE) {
             const done = this.scoreScreen.handleEvent(event);
             if (done) {
-                const rank = this.highScoreScreen.checkHighScore(this.finalScore);
-                if (rank >= 0) {
-                    this.highScoreScreen.startEntry(this.finalScore, rank, this.levelMgr.difficulty);
+                if (this.finalScore > 0 && !this.player.cheated) {
+                    // Always allow name entry for global Firebase leaderboard
+                    this.highScoreScreen.startEntry(this.finalScore, this.levelMgr.difficulty);
                     this.state = STATE_HIGH_SCORES;
                 } else {
                     this._returnToTitle();
@@ -1103,6 +1106,7 @@ class Game {
     // ─── Update Logic ──────────────────────────────────────
 
     _update() {
+        if (this.mobileControls) this.mobileControls.update();
         if (this.state === STATE_LOADING) return;
 
         // Victory screen animation
@@ -1265,8 +1269,9 @@ class Game {
             }
         }
 
-        // Also clear enemy bullets in radius
+        // Also clear enemy bullets in radius (but preserve cash drops)
         this.weaponSystem.enemyBullets = this.weaponSystem.enemyBullets.filter(b => {
+            if (b.damage < 0) return true;  // cash drops have negative damage — keep them
             const dist = Math.sqrt((b.x - ox) ** 2 + (b.y - oy) ** 2);
             return dist > ringOuter;
         });
@@ -1553,7 +1558,7 @@ class Game {
         ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
         if (this._loadComplete) {
             // Loading done — blinking prompt
-            const prompt = "Press any key to start";
+            const prompt = (typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE) ? "Tap to start" : "Press any key to start";
             const pw = ctx.measureText(prompt).width;
             if (Math.floor(Date.now() / 500) % 2 === 0) {
                 ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.50);

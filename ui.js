@@ -747,7 +747,24 @@ class InstructionsScreen {
         ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 5 * SCALE);
 
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const sections = [
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const sections = isMobile ? [
+            { heading: "OBJECTIVE", lines: [
+                "Destroy all enemies in each wave.",
+                "Earn cash to buy upgrades in the shop.",
+                "Survive as long as you can!",
+            ]},
+            { heading: "CONTROLS", lines: [
+                "Left thumb .... Joystick to move",
+                "FIRE button ... Hold to shoot",
+                "BOMB button ... Drop bomb",
+                "MEGA button ... Special weapon",
+                "Pause icon .... Top right corner",
+            ]},
+            { heading: "TIPS", lines: [
+                "Tap menu items to select and activate",
+            ]},
+        ] : [
             { heading: "OBJECTIVE", lines: [
                 "Destroy all enemies in each wave.",
                 "Earn cash to buy upgrades in the shop.",
@@ -995,11 +1012,7 @@ class FeedbackScreen {
 class HighScoreScreen {
     constructor() {
         this.active = false;
-        this.scores = [
-            ["---", 0], ["---", 0], ["---", 0], ["---", 0],
-            ["---", 0], ["---", 0], ["---", 0], ["---", 0],
-        ];
-        // Per-difficulty score caches
+        // Per-difficulty score caches (global Firebase only)
         this._diffTabs = [DIFF_BEGINNER, DIFF_INTERMEDIATE, DIFF_HARD, DIFF_EXPERT];
         this._diffNames = { [DIFF_BEGINNER]: "Beginner", [DIFF_INTERMEDIATE]: "Inter.", [DIFF_HARD]: "Hard", [DIFF_EXPERT]: "Expert" };
         this._diffKeys = { [DIFF_BEGINNER]: "beginner", [DIFF_INTERMEDIATE]: "intermediate", [DIFF_HARD]: "hard", [DIFF_EXPERT]: "expert" };
@@ -1009,32 +1022,11 @@ class HighScoreScreen {
         this.difficulty = DIFF_BEGINNER;
         this.enteringName = false;
         this.newScore = 0;
-        this.newRank = -1;
         this.nameInput = "";
         this.maxNameLen = 12;
         this.blinkTimer = 0;
         this.scrollOffset = 0;
         this.maxVisible = 10;
-        this._load();
-    }
-
-    _load() {
-        try {
-            const saved = localStorage.getItem('phoenixHighScores');
-            if (saved) {
-                this.scores = JSON.parse(saved);
-            }
-        } catch (e) {}
-    }
-
-    _save() {
-        try {
-            localStorage.setItem('phoenixHighScores', JSON.stringify(this.scores));
-        } catch (e) {}
-    }
-
-    _getDiffName(diff) {
-        return { 1: "Beginner", 2: "Intermediate", 3: "Hard", 4: "Expert" }[diff] || "Beginner";
     }
 
     _getDiffKey(diff) {
@@ -1081,26 +1073,15 @@ class HighScoreScreen {
     }
 
     fetchGlobalScores() {
-        // Fetch all difficulties
         for (const diff of this._diffTabs) {
             this._fetchScoresForDiff(diff);
         }
     }
 
-    checkHighScore(score) {
-        for (let i = 0; i < this.scores.length; i++) {
-            if (score > this.scores[i][1]) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    startEntry(score, rank, difficulty) {
+    startEntry(score, difficulty) {
         this.active = true;
         this.enteringName = true;
         this.newScore = score;
-        this.newRank = rank;
         this.difficulty = difficulty || DIFF_BEGINNER;
         this.viewingTab = difficulty || DIFF_BEGINNER;
         this.nameInput = "";
@@ -1122,9 +1103,6 @@ class HighScoreScreen {
         if (this.enteringName) {
             if (event.key === 'Enter' && this.nameInput.trim().length > 0) {
                 const name = this.nameInput.trim();
-                this.scores.splice(this.newRank, 0, [name, this.newScore]);
-                this.scores = this.scores.slice(0, 8);
-                this._save();
                 this._submitGlobalScore(name, this.newScore, this.difficulty);
                 this.enteringName = false;
                 this.scrollOffset = 0;
