@@ -1613,17 +1613,31 @@ class Game {
 
         // Subtitle
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-        const subtitle = "v1.59";
+        const subtitle = "v1.60";
         const stw = ctx.measureText(subtitle).width;
         ctx.fillText(subtitle, (SCREEN_WIDTH - stw) / 2, 16 * SCALE);
+
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
 
         ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
         if (this._loadComplete) {
             // Loading done — blinking prompt
-            const prompt = (typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE) ? "Tap to start" : "Press any key to start";
+            const prompt = isMobile ? "Tap to start" : "Press any key to start";
             const pw = ctx.measureText(prompt).width;
             if (Math.floor(Date.now() / 500) % 2 === 0) {
-                ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.50);
+                ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.48);
+            }
+
+            // Mobile beta notice
+            if (isMobile) {
+                ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
+                const line1 = "This game was designed for keyboard.";
+                const line2 = "Mobile touch controls are in beta!";
+                const l1w = ctx.measureText(line1).width;
+                const l2w = ctx.measureText(line2).width;
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.6)`;
+                ctx.fillText(line1, (SCREEN_WIDTH - l1w) / 2, SCREEN_HEIGHT * 0.62);
+                ctx.fillText(line2, (SCREEN_WIDTH - l2w) / 2, SCREEN_HEIGHT * 0.67);
             }
         } else {
             // Still loading

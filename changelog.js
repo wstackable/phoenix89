@@ -6,6 +6,24 @@
 
 const CHANGELOG = [
     {
+        version: "1.60",
+        date: "Mar 2026",
+        changes: [
+            "Mobile: high score name entry now opens virtual keyboard (tap screen to type)",
+            "Mobile: feedback/bug report screen fully functional (tap to type, tappable submit/cancel buttons)",
+            "Mobile: level select and difficulty now changeable (tap left/right sides of the row)",
+            "Mobile: versions page now supports touch-drag scrolling instead of one-tap-at-a-time",
+            "Mobile: all menu text enlarged for readability (title, menus, high scores, shop)",
+            "Mobile: shop items use larger fonts and taller rows for easier tap targets",
+            "Mobile: added thumbstick visual cue in left sidebar during gameplay",
+            "Mobile: added radio/music button in right sidebar to cycle tracks",
+            "Mobile: all 'Press ENTER' / 'Press any key' prompts now show tap equivalents",
+            "Mobile: selected menu items and shop rows get a highlight background",
+            "Fixed radio cycling muting all sound on iOS (AudioContext resume on interaction)",
+            "Fixed double-character bug on mobile text input (keyboard events no longer duplicated)",
+        ]
+    },
+    {
         version: "1.59",
         date: "Mar 2026",
         changes: [

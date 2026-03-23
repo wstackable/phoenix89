@@ -463,7 +463,7 @@ class TitleScreen {
         // Subtitle
         const subFontSize = isMobile ? Math.floor(12 * SCALE / 4) : Math.floor(10 * SCALE / 4);
         ctx.font = `${subFontSize}px monospace`;
-        const subtitle = "v1.59";
+        const subtitle = "v1.60";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
