@@ -276,49 +276,65 @@ class Shop {
     }
 
     draw(ctx, player = null) {
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
         ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        const shopFontSize = Math.floor(12 * SCALE / 4);
-        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+        const fg = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+
+        // Mobile: larger font and line height for tap targets
+        const shopFontSize = isMobile ? Math.floor(14 * SCALE / 4) : Math.floor(12 * SCALE / 4);
+        const lineH = isMobile ? Math.floor(7.5 * SCALE) : 5 * SCALE;
+        const startY = isMobile ? 6 * SCALE : 8 * SCALE;
+
+        ctx.fillStyle = fg;
         ctx.font = `${shopFontSize}px monospace`;
         ctx.textBaseline = 'top';
-        const title = `Phoenix Shop - Credits: $${player ? player.cash : 0}`;
+        const titleFont = isMobile ? `bold ${Math.floor(14 * SCALE / 4)}px monospace` : `${shopFontSize}px monospace`;
+        ctx.font = titleFont;
+        const title = `Phoenix Shop - $${player ? player.cash : 0}`;
         ctx.fillText(title, 2 * SCALE, 1 * SCALE);
 
-        const lineH = 5 * SCALE;
-        let y = 8 * SCALE;
+        let y = startY;
         ctx.font = `${shopFontSize}px monospace`;
 
         for (let i = 0; i < SHOP_ITEMS.length; i++) {
             const [name, price] = SHOP_ITEMS[i];
             const owned = player && i > 0 && this._isOwned(player, i);
 
+            // Mobile: highlight selected row with background
+            if (i === this.selected && isMobile) {
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.12)`;
+                ctx.fillRect(1 * SCALE, y - 1, SCREEN_WIDTH - 2 * SCALE, lineH);
+            }
+
             if (i === this.selected) {
                 // Draw arrow - centered vertically on font
-                ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+                ctx.fillStyle = fg;
                 const arrowX = 2 * SCALE;
                 const arrowY = y + Math.floor(shopFontSize / 2);
+                const arrowSize = isMobile ? Math.floor(2 * SCALE) : Math.floor(1.5 * SCALE);
                 ctx.beginPath();
-                ctx.moveTo(arrowX, arrowY - Math.floor(1.5 * SCALE));
-                ctx.lineTo(arrowX + Math.floor(1.5 * SCALE), arrowY);
-                ctx.lineTo(arrowX, arrowY + Math.floor(1.5 * SCALE));
+                ctx.moveTo(arrowX, arrowY - arrowSize);
+                ctx.lineTo(arrowX + arrowSize, arrowY);
+                ctx.lineTo(arrowX, arrowY + arrowSize);
                 ctx.closePath();
                 ctx.fill();
             }
 
-            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.fillStyle = fg;
+            ctx.font = `${shopFontSize}px monospace`;
             ctx.fillText(` ${name}`, 5 * SCALE, y);
 
             if (price > 0) {
                 if (owned) {
-                    // Show OWNED or MAX instead of price
                     const label = (i === 1 || i === 2) ? "MAX" : "OWNED";
                     const labelW = ctx.measureText(label).width;
                     ctx.fillText(label, SCREEN_WIDTH - labelW - 3 * SCALE, y);
                 } else {
-                    const priceText = price.toString().padStart(5, ' ');
-                    ctx.fillText(priceText, SCREEN_WIDTH - 40 * SCALE, y);
+                    const priceText = `$${price}`;
+                    const ptw = ctx.measureText(priceText).width;
+                    ctx.fillText(priceText, SCREEN_WIDTH - ptw - 3 * SCALE, y);
                 }
             }
 
@@ -332,11 +348,21 @@ class Shop {
                 [SHIP_PHOENIX]: "The Phoenix", [SHIP_PURPLE_DEVIL]: "Purple Devil",
                 [SHIP_DOUBLE_BLASTERY]: "Double Blastery", [SHIP_RED_BOMBER]: "Red Bomber"
             };
-            ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+            const infoFont = isMobile ? Math.floor(12 * SCALE / 4) : Math.floor(12 * SCALE / 4);
+            ctx.font = `${infoFont}px monospace`;
+            ctx.fillStyle = fg;
             const line1 = `Ship: ${shipNames[player.shipType] || '?'}`;
-            const line2 = `Shield: ${player.shield}/${MAX_SHIELD}   Bombs: ${player.bombs}/${MAX_BOMBS}   Cash: $${player.cash}`;
+            const line2 = `HP:${player.shield}/${MAX_SHIELD}  Bombs:${player.bombs}/${MAX_BOMBS}  $${player.cash}`;
             ctx.fillText(line1, 4 * SCALE, SCREEN_HEIGHT - 10 * SCALE);
             ctx.fillText(line2, 4 * SCALE, SCREEN_HEIGHT - 5 * SCALE);
+
+            // Mobile: draw EXIT hint at bottom-right
+            if (isMobile) {
+                ctx.font = `bold ${Math.floor(11 * SCALE / 4)}px monospace`;
+                const exitText = "Tap here to EXIT";
+                const etw = ctx.measureText(exitText).width;
+                ctx.fillText(exitText, SCREEN_WIDTH - etw - 4 * SCALE, SCREEN_HEIGHT - 5 * SCALE);
+            }
         }
         ctx.textBaseline = 'alphabetic';
     }
@@ -547,7 +573,8 @@ class AboutScreen {
         }
 
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const prompt = "Press any key to return";
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const prompt = isMobile ? "Tap anywhere to return" : "Press any key to return";
         const promptMetrics = ctx.measureText(prompt);
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 6 * SCALE);
     }
@@ -709,7 +736,8 @@ class ChangeLogScreen {
         // Bottom prompt
         ctx.fillStyle = `rgb(${fg[0]}, ${fg[1]}, ${fg[2]})`;
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const prompt = "\u2191\u2193 Scroll   |   ESC to return";
+        const isMobileLog = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const prompt = isMobileLog ? "Swipe to scroll   Tap center to exit" : "\u2191\u2193 Scroll   |   ESC to return";
         const promptMetrics = ctx.measureText(prompt);
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 4 * SCALE);
     }
@@ -802,7 +830,8 @@ class InstructionsScreen {
         }
 
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const prompt = "Press any key to return";
+        const isMobileInstr = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const prompt = isMobileInstr ? "Tap anywhere to return" : "Press any key to return";
         const promptMetrics = ctx.measureText(prompt);
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptMetrics.width / 2, SCREEN_HEIGHT - 6 * SCALE);
     }
@@ -921,7 +950,8 @@ class FeedbackScreen {
             ctx.fillText(msg2, SCREEN_WIDTH / 2 - m2w / 2, 48 * SCALE);
 
             ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-            const prompt = "Press any key to return";
+            const isMobileFb = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+            const prompt = isMobileFb ? "Tap anywhere to return" : "Press any key to return";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
             return;
@@ -1001,7 +1031,8 @@ class FeedbackScreen {
         // Bottom prompts
         ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
         ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
-        const p1 = "ENTER: Submit   ESC: Cancel";
+        const isMobileFeedback = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const p1 = isMobileFeedback ? "Tap SUBMIT or CANCEL at bottom" : "ENTER: Submit   ESC: Cancel";
         const p1w = ctx.measureText(p1).width;
         ctx.fillText(p1, SCREEN_WIDTH / 2 - p1w / 2, SCREEN_HEIGHT - 6 * SCALE);
     }
@@ -1088,6 +1119,54 @@ class HighScoreScreen {
         this.blinkTimer = 0;
         this.scrollOffset = 0;
         this.fetchGlobalScores();
+
+        // On mobile, focus the hidden input to trigger virtual keyboard
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        if (isMobile) {
+            this._setupMobileInput();
+        }
+    }
+
+    _setupMobileInput() {
+        const input = document.getElementById('mobileNameInput');
+        if (!input) return;
+        input.value = '';
+        // Small delay to ensure focus works on iOS Safari
+        setTimeout(() => {
+            input.focus();
+            input.click();
+        }, 100);
+
+        // Listen for input changes
+        this._mobileInputHandler = () => {
+            // Filter to allowed characters
+            const filtered = input.value.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, this.maxNameLen);
+            this.nameInput = filtered;
+            input.value = filtered;
+        };
+        this._mobileKeyHandler = (e) => {
+            if (e.key === 'Enter' && this.nameInput.trim().length > 0) {
+                e.preventDefault();
+                const name = this.nameInput.trim();
+                this._submitGlobalScore(name, this.newScore, this.difficulty);
+                this.enteringName = false;
+                this.scrollOffset = 0;
+                this._cleanupMobileInput();
+            }
+        };
+        input.addEventListener('input', this._mobileInputHandler);
+        input.addEventListener('keydown', this._mobileKeyHandler);
+    }
+
+    _cleanupMobileInput() {
+        const input = document.getElementById('mobileNameInput');
+        if (!input) return;
+        if (this._mobileInputHandler) input.removeEventListener('input', this._mobileInputHandler);
+        if (this._mobileKeyHandler) input.removeEventListener('keydown', this._mobileKeyHandler);
+        this._mobileInputHandler = null;
+        this._mobileKeyHandler = null;
+        input.blur();
+        input.value = '';
     }
 
     show() {
@@ -1221,11 +1300,13 @@ class HighScoreScreen {
             }
         }
 
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+
         if (this.enteringName) {
             const entryY = SCREEN_HEIGHT - 22 * SCALE;
             ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
             ctx.fillStyle = fg;
-            const label = "Enter your name:";
+            const label = isMobile ? "Enter your name (tap box to type):" : "Enter your name:";
             const lw = ctx.measureText(label).width;
             ctx.fillText(label, SCREEN_WIDTH / 2 - lw / 2, entryY);
 
@@ -1234,7 +1315,7 @@ class HighScoreScreen {
             const boxX = SCREEN_WIDTH / 2 - boxW / 2;
             const boxY = entryY + 3 * SCALE;
             ctx.strokeStyle = fg;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = isMobile ? 2 : 1;
             ctx.strokeRect(boxX, boxY, boxW, boxH);
 
             ctx.fillStyle = fg;
@@ -1242,14 +1323,35 @@ class HighScoreScreen {
             const cursor = this.blinkTimer < 25 ? "_" : " ";
             ctx.fillText(this.nameInput + cursor, boxX + 2 * SCALE, boxY + Math.floor(4.5 * SCALE));
 
+            // Submit button for mobile
+            if (isMobile && this.nameInput.trim().length > 0) {
+                const btnW = 30 * SCALE;
+                const btnH = 7 * SCALE;
+                const btnX = SCREEN_WIDTH / 2 - btnW / 2;
+                const btnY = SCREEN_HEIGHT - 14 * SCALE;
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.15)`;
+                ctx.fillRect(btnX, btnY, btnW, btnH);
+                ctx.strokeStyle = fg;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(btnX, btnY, btnW, btnH);
+                ctx.fillStyle = fg;
+                ctx.font = `bold ${Math.floor(14 * SCALE / 4)}px monospace`;
+                const submitText = "SUBMIT";
+                const stw = ctx.measureText(submitText).width;
+                ctx.fillText(submitText, SCREEN_WIDTH / 2 - stw / 2, btnY + Math.floor(5 * SCALE));
+            }
+
             ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
-            const prompt = "Type your name, then press ENTER";
+            ctx.fillStyle = fg;
+            const prompt = isMobile ? "Tap the box to type, then SUBMIT" : "Type your name, then press ENTER";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         } else {
             ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
             ctx.fillStyle = fg;
-            const prompt = "\u2190\u2192 Difficulty   \u2191\u2193 Scroll   ENTER: Back";
+            const prompt = isMobile
+                ? "Tap tabs to switch   Tap here to go back"
+                : "\u2190\u2192 Difficulty   \u2191\u2193 Scroll   ENTER: Back";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         }
@@ -1553,7 +1655,8 @@ class VictoryScreen {
             if (this.timer > 60 && Math.floor(this.timer / 20) % 2 === 0) {
                 ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
                 ctx.fillStyle = "rgb(150, 150, 180)";
-                const prompt = "Press any key for credits";
+                const isMobileVic = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+                const prompt = isMobileVic ? "Tap for credits" : "Press any key for credits";
                 const pw = ctx.measureText(prompt).width;
                 ctx.fillText(prompt, (SCREEN_WIDTH - pw) / 2, SCREEN_HEIGHT * 0.72);
             }
@@ -1606,7 +1709,8 @@ class VictoryScreen {
             if (this.timer > 90 && Math.floor(this.timer / 25) % 2 === 0) {
                 ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
                 ctx.fillStyle = "rgba(150, 150, 180, 0.6)";
-                const hintText = "Press any key to continue";
+                const isMobileVic2 = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+                const hintText = isMobileVic2 ? "Tap to continue" : "Press any key to continue";
                 const hw = ctx.measureText(hintText).width;
                 ctx.fillText(hintText, (SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 3 * SCALE);
             }
@@ -1749,7 +1853,8 @@ class ScoreScreen {
         // Prompt
         ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
         ctx.fillStyle = fg;
-        const prompt = "Press ENTER to continue";
+        const isMobileScore = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        const prompt = isMobileScore ? "Tap to continue" : "Press ENTER to continue";
         const promptW = ctx.measureText(prompt).width;
         ctx.fillText(prompt, SCREEN_WIDTH / 2 - promptW / 2, SCREEN_HEIGHT - 6 * SCALE);
     }

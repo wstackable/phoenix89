@@ -120,6 +120,7 @@ class MobileControls {
 
         if (!IS_TOUCH_DEVICE) return;
         this._createUI();
+        this._createSidebarUI();
         this._initJoystick();
         this._initButtons();
         this._initMenuTouch();
@@ -231,6 +232,126 @@ class MobileControls {
         `;
         container.appendChild(pauseBtn);
         this.pauseBtn = pauseBtn;
+    }
+
+    _createSidebarUI() {
+        // Thumbstick visual cue — in the left black bar area
+        // Shows a translucent thumb/circle imprint to guide the player
+        const thumbCue = document.createElement('div');
+        thumbCue.id = 'thumbCue';
+        thumbCue.innerHTML = `
+            <div style="
+                width: 54px; height: 54px; border-radius: 50%;
+                border: 2px dashed rgba(202, 211, 185, 0.25);
+                display: flex; align-items: center; justify-content: center;
+                position: relative;
+            ">
+                <div style="
+                    width: 22px; height: 22px; border-radius: 50%;
+                    background: rgba(202, 211, 185, 0.12);
+                    border: 1px solid rgba(202, 211, 185, 0.2);
+                "></div>
+            </div>
+            <div style="
+                font-family: monospace; font-size: 9px;
+                color: rgba(202, 211, 185, 0.35);
+                margin-top: 4px; text-align: center;
+                white-space: nowrap;
+            ">MOVE</div>
+        `;
+        thumbCue.style.cssText = `
+            position: fixed;
+            left: 8px;
+            bottom: 30%;
+            z-index: 50;
+            pointer-events: none;
+            display: flex; flex-direction: column; align-items: center;
+            opacity: 0.7;
+        `;
+        document.body.appendChild(thumbCue);
+        this.thumbCue = thumbCue;
+
+        // Radio button — in the right black bar area
+        const radioBtn = document.createElement('div');
+        radioBtn.id = 'radioBtn';
+        radioBtn.innerHTML = '♪';
+        radioBtn.style.cssText = `
+            position: fixed;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 150;
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: rgba(202, 211, 185, 0.08);
+            border: 2px solid rgba(202, 211, 185, 0.2);
+            color: rgba(202, 211, 185, 0.55);
+            font-family: monospace; font-size: 20px;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: auto;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
+            cursor: pointer;
+        `;
+        document.body.appendChild(radioBtn);
+        this.radioBtn = radioBtn;
+
+        // Radio button tap handler — cycle music track
+        radioBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.soundManager) {
+                window.soundManager.nextTrack();
+                // Flash the button
+                radioBtn.style.background = 'rgba(202, 211, 185, 0.3)';
+                radioBtn.style.color = 'rgba(202, 211, 185, 0.9)';
+                setTimeout(() => {
+                    radioBtn.style.background = 'rgba(202, 211, 185, 0.08)';
+                    radioBtn.style.color = 'rgba(202, 211, 185, 0.55)';
+                }, 200);
+            }
+            // Trigger radio popup in game
+            if (this.game) this.game.radioPopupTimer = 90;
+        }, { passive: false });
+
+        // Position sidebar elements relative to the canvas
+        this._updateSidebarPositions();
+        window.addEventListener('resize', () => this._updateSidebarPositions());
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => this._updateSidebarPositions());
+        }
+    }
+
+    _updateSidebarPositions() {
+        const canvas = this.game.canvas;
+        const rect = canvas.getBoundingClientRect();
+
+        // Left black bar: 0 to rect.left
+        const leftBarW = rect.left;
+        // Right black bar: rect.right to window width
+        const rightBarStart = rect.right;
+        const rightBarW = window.innerWidth - rightBarStart;
+
+        // Thumb cue: centered in left bar
+        if (this.thumbCue) {
+            if (leftBarW > 30) {
+                this.thumbCue.style.display = 'flex';
+                this.thumbCue.style.left = `${Math.max(2, Math.floor(leftBarW / 2 - 27))}px`;
+                this.thumbCue.style.bottom = '30%';
+            } else {
+                this.thumbCue.style.display = 'none';
+            }
+        }
+
+        // Radio button: centered in right bar
+        if (this.radioBtn) {
+            if (rightBarW > 30) {
+                this.radioBtn.style.display = 'flex';
+                this.radioBtn.style.right = `${Math.max(2, Math.floor(rightBarW / 2 - 22))}px`;
+            } else {
+                this.radioBtn.style.display = 'none';
+            }
+        }
     }
 
     _initJoystick() {
@@ -413,8 +534,9 @@ class MobileControls {
     }
 
     _handleShopTap(x, y) {
-        const menuTop = 8 * SCALE;
-        const lineH = 5 * SCALE;
+        // Match the mobile-aware layout in Shop.draw()
+        const lineH = Math.floor(7.5 * SCALE);  // mobile lineH
+        const menuTop = 6 * SCALE;               // mobile startY
 
         for (let i = 0; i < SHOP_ITEMS.length; i++) {
             const itemTop = menuTop + i * lineH;
@@ -424,11 +546,13 @@ class MobileControls {
                     this._triggerKey('Enter');
                 } else {
                     this.game.shop.selected = i;
+                    window.soundManager?.play("menu_move");
                 }
                 return;
             }
         }
 
+        // Bottom area = exit shop
         if (y > SCREEN_HEIGHT - 15 * SCALE) {
             this._triggerKey('Escape');
         }
@@ -506,7 +630,44 @@ class MobileControls {
 
     _handleHighScoreTap(x, y) {
         const hs = this.game.highScoreScreen;
-        if (hs.enteringName) return;
+
+        if (hs.enteringName) {
+            // Name input box area: focus the hidden input to trigger keyboard
+            const entryY = SCREEN_HEIGHT - 22 * SCALE;
+            const boxW = 52 * SCALE;
+            const boxH = 6 * SCALE;
+            const boxX = SCREEN_WIDTH / 2 - boxW / 2;
+            const boxY = entryY + 3 * SCALE;
+            if (y >= boxY - 4 * SCALE && y <= boxY + boxH + 4 * SCALE &&
+                x >= boxX - 4 * SCALE && x <= boxX + boxW + 4 * SCALE) {
+                // Tap on text box — focus the hidden input
+                const input = document.getElementById('mobileNameInput');
+                if (input) {
+                    input.value = hs.nameInput;
+                    input.focus();
+                    input.click();
+                }
+                return;
+            }
+
+            // Submit button area
+            const btnW = 30 * SCALE;
+            const btnH = 7 * SCALE;
+            const btnX = SCREEN_WIDTH / 2 - btnW / 2;
+            const btnY = SCREEN_HEIGHT - 14 * SCALE;
+            if (y >= btnY && y <= btnY + btnH &&
+                x >= btnX && x <= btnX + btnW &&
+                hs.nameInput.trim().length > 0) {
+                // Submit
+                const name = hs.nameInput.trim();
+                hs._submitGlobalScore(name, hs.newScore, hs.difficulty);
+                hs.enteringName = false;
+                hs.scrollOffset = 0;
+                hs._cleanupMobileInput();
+                return;
+            }
+            return;
+        }
 
         if (y < 20 * SCALE) {
             // Tab area
@@ -551,6 +712,17 @@ class MobileControls {
         this.bombBtn.style.display = playing ? 'flex' : 'none';
         this.pauseBtn.style.display = playing ? 'flex' : 'none';
         this.joyZone.style.pointerEvents = playing ? 'auto' : 'none';
+
+        // Sidebar elements: show thumb cue only during gameplay, radio always visible
+        if (this.thumbCue) {
+            const showThumb = playing;
+            this.thumbCue.style.opacity = showThumb ? '0.7' : '0';
+            this.thumbCue.style.transition = 'opacity 0.3s';
+        }
+        if (this.radioBtn) {
+            // Radio button always visible (can change music from menu too)
+            this._updateSidebarPositions();
+        }
 
         // Mega button: only for Brady/Caleb
         const showMega = playing && this.game.player &&

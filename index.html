@@ -56,6 +56,12 @@
 <body>
     <canvas id="gameCanvas" width="640" height="560"></canvas>
 
+    <!-- Hidden input for mobile virtual keyboard (name entry on high scores) -->
+    <input id="mobileNameInput" type="text" maxlength="12" autocomplete="off" autocorrect="off"
+           autocapitalize="off" spellcheck="false"
+           style="position:fixed; left:-9999px; top:0; opacity:0; width:1px; height:1px; border:none; outline:none; font-size:16px;"
+    />
+
     <!-- Firebase SDK (leaderboard) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
