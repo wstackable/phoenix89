@@ -528,15 +528,31 @@ class Game {
     }
 
     _gameLoop = (timestamp) => {
-        // Cap to 60fps to match Python/Pygame version (clock.tick(60))
+        // Time-based game loop: accumulate real elapsed time and run
+        // logic ticks at a fixed 30fps rate regardless of render framerate.
+        // This prevents the game from feeling slow on phones that drop
+        // below 60fps or have high-refresh (120Hz) screens.
         const elapsed = timestamp - this._lastFrameTime;
-        if (elapsed < 1000 / FPS - 0.5) {
+
+        // Skip if called too soon (cap render at ~60fps on desktop)
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        if (!isMobile && elapsed < 1000 / FPS - 0.5) {
             requestAnimationFrame(this._gameLoop);
             return;
         }
         this._lastFrameTime = timestamp;
 
-        this._update();
+        // Accumulate time for logic ticks (capped to prevent spiral of death)
+        this._logicAccum = (this._logicAccum || 0) + Math.min(elapsed, 100);
+        const LOGIC_MS = 1000 / 30;  // 30fps logic rate = 33.33ms per tick
+
+        // Run as many logic ticks as needed to catch up
+        while (this._logicAccum >= LOGIC_MS) {
+            this._logicAccum -= LOGIC_MS;
+            this._updateLogic();
+        }
+
+        this._updateNonLogic();
         this._draw();
         requestAnimationFrame(this._gameLoop);
     }
@@ -1105,8 +1121,20 @@ class Game {
 
     // ─── Update Logic ──────────────────────────────────────
 
-    _update() {
+    /**
+     * Per-render-frame updates (mobile controls, animations).
+     * Called once per rAF regardless of logic tick rate.
+     */
+    _updateNonLogic() {
         if (this.mobileControls) this.mobileControls.update();
+    }
+
+    /**
+     * Fixed-rate game logic tick (~30fps).
+     * Called by the time-accumulator in _gameLoop — may run multiple
+     * times per render frame to catch up if the browser drops frames.
+     */
+    _updateLogic() {
         if (this.state === STATE_LOADING) return;
 
         // Victory screen animation
@@ -1124,7 +1152,7 @@ class Game {
         // Wave transition plays above normal update
         if (this.waveTransition.active) {
             const done = this.waveTransition.update();
-            // Accelerate borders and stars during warp (matches Python: extra_ticks based on warp speed)
+            // Accelerate borders and stars during warp
             const progress = this.waveTransition.timer / this.waveTransition.DURATION;
             const warpSpeed = this.waveTransition._getWarpSpeed(progress);
             const extraTicks = Math.floor(warpSpeed - 1);
@@ -1158,10 +1186,6 @@ class Game {
         }
 
         if (this.state !== STATE_PLAYING) return;
-
-        this.logicCounter++;
-        if (this.logicCounter < LOGIC_FRAMES) return;
-        this.logicCounter = 0;
 
         // ─── One logic tick at ~30fps ─────────────────
 
@@ -1452,20 +1476,58 @@ class Game {
             ctx.fillStyle = `rgba(0, 0, 0, 0.5)`;
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+            const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+
+            // Title
             ctx.fillStyle = 'rgb(255, 255, 255)';
             ctx.font = `bold ${Math.floor(24 * SCALE / 4)}px monospace`;
             const pausedText = "PAUSED";
             const pw = ctx.measureText(pausedText).width;
-            ctx.fillText(pausedText, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT / 2 - 20);
+            ctx.fillText(pausedText, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT / 2 - (isMobile ? 30 * SCALE / 4 : 20));
 
-            ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
-            const infoText = "ESC: Resume | S: Store | F: Feedback / Bugs";
-            const iw = ctx.measureText(infoText).width;
-            ctx.fillText(infoText, SCREEN_WIDTH / 2 - iw / 2, SCREEN_HEIGHT / 2 + 20);
+            if (isMobile) {
+                // Draw tappable button rectangles
+                const btnW = 50 * SCALE;
+                const btnH = 10 * SCALE;
+                const btnX = SCREEN_WIDTH / 2 - btnW / 2;
+                const startY = SCREEN_HEIGHT / 2 - 4 * SCALE;
+                const gap = 2 * SCALE;
+                const labels = ["RESUME", "SHOP", "QUIT"];
+                const colors = [
+                    'rgba(202, 211, 185, 0.3)',
+                    'rgba(100, 180, 255, 0.25)',
+                    'rgba(220, 80, 60, 0.25)',
+                ];
+                const borderColors = [
+                    'rgba(202, 211, 185, 0.6)',
+                    'rgba(100, 180, 255, 0.5)',
+                    'rgba(220, 80, 60, 0.5)',
+                ];
+                ctx.font = `bold ${Math.floor(16 * SCALE / 4)}px monospace`;
+                for (let i = 0; i < labels.length; i++) {
+                    const by = startY + i * (btnH + gap);
+                    // Button background
+                    ctx.fillStyle = colors[i];
+                    ctx.fillRect(btnX, by, btnW, btnH);
+                    // Button border
+                    ctx.strokeStyle = borderColors[i];
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(btnX, by, btnW, btnH);
+                    // Label
+                    ctx.fillStyle = 'rgb(255, 255, 255)';
+                    const lw = ctx.measureText(labels[i]).width;
+                    ctx.fillText(labels[i], SCREEN_WIDTH / 2 - lw / 2, by + btnH / 2 + Math.floor(4 * SCALE / 4));
+                }
+            } else {
+                ctx.font = `${Math.floor(14 * SCALE / 4)}px monospace`;
+                const infoText = "ESC: Resume | S: Store | F: Feedback / Bugs";
+                const iw = ctx.measureText(infoText).width;
+                ctx.fillText(infoText, SCREEN_WIDTH / 2 - iw / 2, SCREEN_HEIGHT / 2 + 20);
 
-            const infoText2 = "N: Next Wave | Q: Quit";
-            const iw2 = ctx.measureText(infoText2).width;
-            ctx.fillText(infoText2, SCREEN_WIDTH / 2 - iw2 / 2, SCREEN_HEIGHT / 2 + 40);
+                const infoText2 = "N: Next Wave | Q: Quit";
+                const iw2 = ctx.measureText(infoText2).width;
+                ctx.fillText(infoText2, SCREEN_WIDTH / 2 - iw2 / 2, SCREEN_HEIGHT / 2 + 40);
+            }
 
         } else if (this.state === STATE_ABOUT) {
             this.aboutScreen.draw(ctx);
