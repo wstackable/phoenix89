@@ -242,19 +242,19 @@ class MobileControls {
         thumbCue.innerHTML = `
             <div style="
                 width: 54px; height: 54px; border-radius: 50%;
-                border: 2px dashed rgba(202, 211, 185, 0.25);
+                border: 2px dashed rgba(202, 211, 185, 0.55);
                 display: flex; align-items: center; justify-content: center;
                 position: relative;
             ">
                 <div style="
                     width: 22px; height: 22px; border-radius: 50%;
-                    background: rgba(202, 211, 185, 0.12);
-                    border: 1px solid rgba(202, 211, 185, 0.2);
+                    background: rgba(202, 211, 185, 0.2);
+                    border: 1.5px solid rgba(202, 211, 185, 0.4);
                 "></div>
             </div>
             <div style="
-                font-family: monospace; font-size: 9px;
-                color: rgba(202, 211, 185, 0.35);
+                font-family: monospace; font-size: 10px;
+                color: rgba(202, 211, 185, 0.6);
                 margin-top: 4px; text-align: center;
                 white-space: nowrap;
             ">MOVE</div>
@@ -266,7 +266,7 @@ class MobileControls {
             z-index: 50;
             pointer-events: none;
             display: flex; flex-direction: column; align-items: center;
-            opacity: 0.7;
+            opacity: 1;
         `;
         document.body.appendChild(thumbCue);
         this.thumbCue = thumbCue;
@@ -281,12 +281,12 @@ class MobileControls {
             top: 50%;
             transform: translateY(-50%);
             z-index: 150;
-            width: 44px; height: 44px;
+            width: 46px; height: 46px;
             border-radius: 50%;
-            background: rgba(202, 211, 185, 0.08);
-            border: 2px solid rgba(202, 211, 185, 0.2);
-            color: rgba(202, 211, 185, 0.55);
-            font-family: monospace; font-size: 20px;
+            background: rgba(202, 211, 185, 0.12);
+            border: 2px solid rgba(202, 211, 185, 0.45);
+            color: rgba(202, 211, 185, 0.8);
+            font-family: monospace; font-size: 22px;
             display: flex; align-items: center; justify-content: center;
             pointer-events: auto;
             user-select: none; -webkit-user-select: none;
@@ -301,13 +301,15 @@ class MobileControls {
             e.preventDefault();
             e.stopPropagation();
             if (window.soundManager) {
+                // Ensure AudioContext is alive (iOS Safari suspends it aggressively)
+                window.soundManager.ensureAudioContext();
                 window.soundManager.nextTrack();
                 // Flash the button
-                radioBtn.style.background = 'rgba(202, 211, 185, 0.3)';
-                radioBtn.style.color = 'rgba(202, 211, 185, 0.9)';
+                radioBtn.style.background = 'rgba(202, 211, 185, 0.4)';
+                radioBtn.style.color = 'rgba(202, 211, 185, 1.0)';
                 setTimeout(() => {
-                    radioBtn.style.background = 'rgba(202, 211, 185, 0.08)';
-                    radioBtn.style.color = 'rgba(202, 211, 185, 0.55)';
+                    radioBtn.style.background = 'rgba(202, 211, 185, 0.12)';
+                    radioBtn.style.color = 'rgba(202, 211, 185, 0.8)';
                 }, 200);
             }
             // Trigger radio popup in game
@@ -332,22 +334,26 @@ class MobileControls {
         const rightBarStart = rect.right;
         const rightBarW = window.innerWidth - rightBarStart;
 
-        // Thumb cue: centered in left bar
+        // Thumb cue: centered horizontally in left bar
         if (this.thumbCue) {
             if (leftBarW > 30) {
                 this.thumbCue.style.display = 'flex';
-                this.thumbCue.style.left = `${Math.max(2, Math.floor(leftBarW / 2 - 27))}px`;
+                // Center the 54px-wide element in the left bar
+                const thumbLeft = Math.max(2, Math.floor((leftBarW - 54) / 2));
+                this.thumbCue.style.left = `${thumbLeft}px`;
                 this.thumbCue.style.bottom = '30%';
             } else {
                 this.thumbCue.style.display = 'none';
             }
         }
 
-        // Radio button: centered in right bar
+        // Radio button: centered horizontally in right bar
         if (this.radioBtn) {
             if (rightBarW > 30) {
                 this.radioBtn.style.display = 'flex';
-                this.radioBtn.style.right = `${Math.max(2, Math.floor(rightBarW / 2 - 22))}px`;
+                // Center the 46px-wide element in the right bar
+                const radioRight = Math.max(2, Math.floor((rightBarW - 46) / 2));
+                this.radioBtn.style.right = `${radioRight}px`;
             } else {
                 this.radioBtn.style.display = 'none';
             }
@@ -462,6 +468,10 @@ class MobileControls {
     _initMenuTouch() {
         const canvas = this.game.canvas;
 
+        // Track touch start position for drag scrolling
+        this._touchStartY = 0;
+        this._touchDragging = false;
+
         canvas.addEventListener('touchstart', (e) => {
             if (this.game.state === STATE_PLAYING) return;
             e.preventDefault();
@@ -473,7 +483,47 @@ class MobileControls {
             const x = (touch.clientX - rect.left) * scaleX;
             const y = (touch.clientY - rect.top) * scaleY;
 
-            this._handleMenuTap(x, y);
+            this._touchStartY = touch.clientY;
+            this._touchStartX = x;
+            this._touchStartGameY = y;
+            this._touchDragging = false;
+
+            // For non-scrollable states, handle tap immediately
+            if (this.game.state !== STATE_CHANGELOG) {
+                this._handleMenuTap(x, y);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (this.game.state !== STATE_CHANGELOG) return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const deltaY = this._touchStartY - touch.clientY;
+
+            // If moved more than 8px, it's a drag
+            if (Math.abs(deltaY) > 8) {
+                this._touchDragging = true;
+                const cl = this.game.changeLogScreen;
+                if (cl) {
+                    // Scale the drag distance to game coordinates
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleY = SCREEN_HEIGHT / rect.height;
+                    const scrollDelta = deltaY * scaleY;
+                    cl.scrollY = Math.max(0, Math.min(cl.maxScroll, cl.scrollY + scrollDelta));
+                }
+                this._touchStartY = touch.clientY;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (this.game.state === STATE_CHANGELOG) {
+                // If it wasn't a drag, treat as a tap
+                if (!this._touchDragging) {
+                    this._handleMenuTap(this._touchStartX, this._touchStartGameY);
+                }
+            }
+            this._touchDragging = false;
         }, { passive: false });
     }
 
@@ -494,6 +544,8 @@ class MobileControls {
             this._handleHighScoreTap(x, y);
         } else if (state === STATE_CHANGELOG) {
             this._handleChangelogTap(x, y);
+        } else if (state === STATE_FEEDBACK) {
+            this._handleFeedbackTap(x, y);
         } else if (state === STATE_SCORE || state === STATE_ABOUT ||
                    state === STATE_INSTRUCTIONS || state === STATE_DEATH_ANIM ||
                    state === STATE_VICTORY) {
@@ -505,7 +557,7 @@ class MobileControls {
         const ts = this.game.titleScreen;
         // Menu items: y starts at 28*SCALE, lineH = 8*SCALE, 7 items
         // Use generous hit zones — extend each item's tap area
-        const menuTop = 24 * SCALE;  // start a bit above actual text
+        const menuTop = 24 * SCALE;
         const lineH = 8 * SCALE;
 
         for (let i = 0; i < 7; i++) {
@@ -513,22 +565,22 @@ class MobileControls {
             const itemBot = itemTop + lineH;
             if (y >= itemTop && y < itemBot) {
                 if (i === ts.selected) {
-                    // Tap on already-selected item = activate
+                    // For New Game (0) and Level Select (1): left/right taps change difficulty/level
+                    if ((i === 0 || i === 1) && x > SCREEN_WIDTH * 0.55) {
+                        this._triggerKey('ArrowRight');
+                        return;
+                    }
+                    if ((i === 0 || i === 1) && x < SCREEN_WIDTH * 0.35) {
+                        this._triggerKey('ArrowLeft');
+                        return;
+                    }
+                    // Center tap = activate
                     this._triggerKey('Enter');
                 } else {
                     ts.selected = i;
                     window.soundManager?.play("menu_move");
                 }
                 return;
-            }
-        }
-
-        // Difficulty/level arrows: tapping left or right half of screen
-        if (y >= menuTop && y < menuTop + lineH * 2) {
-            if (x < SCREEN_WIDTH * 0.35) {
-                this._triggerKey('ArrowLeft');
-            } else if (x > SCREEN_WIDTH * 0.65) {
-                this._triggerKey('ArrowRight');
             }
         }
     }
@@ -682,14 +734,70 @@ class MobileControls {
         }
     }
 
+    _handleFeedbackTap(x, y) {
+        const fb = this.game.feedbackScreen;
+        if (!fb) return;
+
+        // Thank you phase — tap anywhere to exit
+        if (fb.phase === "thankyou") {
+            this._triggerKey('Enter');
+            return;
+        }
+
+        if (fb.phase === "sending") return;
+
+        // Compose phase
+        // Type selector area (y ~ 18*SCALE to 30*SCALE)
+        const typeAreaTop = 18 * SCALE;
+        const typeAreaBot = 30 * SCALE;
+        if (y >= typeAreaTop && y < typeAreaBot) {
+            // Toggle type (same as Tab)
+            fb.type = (fb.type + 1) % 2;
+            return;
+        }
+
+        // Text box area — focus the hidden textarea
+        const boxY = 40 * SCALE;
+        const boxBot = boxY + 28 * SCALE;
+        if (y >= boxY - 4 * SCALE && y < boxBot + 4 * SCALE) {
+            const input = document.getElementById('mobileFeedbackInput');
+            if (input) {
+                input.value = fb.message;
+                input.focus();
+                input.click();
+            }
+            return;
+        }
+
+        // Bottom buttons area
+        const btnH = 8 * SCALE;
+        const btnW = 22 * SCALE;
+        const gap = 4 * SCALE;
+        const btnY = SCREEN_HEIGHT - 12 * SCALE;
+        const cancelX = SCREEN_WIDTH / 2 - btnW - gap / 2;
+        const submitX = SCREEN_WIDTH / 2 + gap / 2;
+
+        if (y >= btnY && y <= btnY + btnH) {
+            // CANCEL button
+            if (x >= cancelX && x <= cancelX + btnW) {
+                fb._cleanupMobileFeedbackInput();
+                this._triggerKey('Escape');
+                return;
+            }
+            // SUBMIT button
+            if (x >= submitX && x <= submitX + btnW && fb.message.trim().length > 0) {
+                fb._submit();
+                return;
+            }
+        }
+    }
+
     _handleChangelogTap(x, y) {
-        if (y < SCREEN_HEIGHT * 0.3) {
-            this._triggerKey('ArrowUp');
-        } else if (y > SCREEN_HEIGHT * 0.7) {
-            this._triggerKey('ArrowDown');
-        } else {
+        // Bottom 20% = exit, otherwise use drag scrolling (handled by _initChangelogDrag)
+        if (y > SCREEN_HEIGHT * 0.85) {
             this._triggerKey('Escape');
         }
+        // Taps in the scroll area are handled by drag — no single-tap scroll
     }
 
     // ─── Per-Frame Update ─────────────────────────────────────
@@ -716,7 +824,7 @@ class MobileControls {
         // Sidebar elements: show thumb cue only during gameplay, radio always visible
         if (this.thumbCue) {
             const showThumb = playing;
-            this.thumbCue.style.opacity = showThumb ? '0.7' : '0';
+            this.thumbCue.style.opacity = showThumb ? '1' : '0.3';
             this.thumbCue.style.transition = 'opacity 0.3s';
         }
         if (this.radioBtn) {

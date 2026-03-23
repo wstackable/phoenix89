@@ -443,6 +443,7 @@ class TitleScreen {
     }
 
     draw(ctx) {
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
         ctx.fillStyle = `rgb(${COLOR_BG[0]}, ${COLOR_BG[1]}, ${COLOR_BG[2]})`;
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -453,36 +454,48 @@ class TitleScreen {
 
         // Title
         ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
-        ctx.font = `bold ${Math.floor(28 * SCALE / 4)}px monospace`;
+        const titleFontSize = isMobile ? Math.floor(32 * SCALE / 4) : Math.floor(28 * SCALE / 4);
+        ctx.font = `bold ${titleFontSize}px monospace`;
         const title = "PHOENIX 89";
         const titleMetrics = ctx.measureText(title);
         ctx.fillText(title, SCREEN_WIDTH / 2 - titleMetrics.width / 2, 12 * SCALE);
 
         // Subtitle
-        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const subFontSize = isMobile ? Math.floor(12 * SCALE / 4) : Math.floor(10 * SCALE / 4);
+        ctx.font = `${subFontSize}px monospace`;
         const subtitle = "v1.59";
         const subMetrics = ctx.measureText(subtitle);
         ctx.fillText(subtitle, SCREEN_WIDTH / 2 - subMetrics.width / 2, 16 * SCALE);
 
         // Menu items
-        const menuItems = ["New Game", "Level Select", "Instructions", "High Scores", "Versions - What We Did", "Suggestions / Bugs", "About"];
-        const menuFontSize = Math.floor(14 * SCALE / 4);
+        const menuItems = isMobile
+            ? ["New Game", "Level Select", "Instructions", "High Scores", "Versions", "Bugs / Ideas", "About"]
+            : ["New Game", "Level Select", "Instructions", "High Scores", "Versions - What We Did", "Suggestions / Bugs", "About"];
+        const menuFontSize = isMobile ? Math.floor(18 * SCALE / 4) : Math.floor(14 * SCALE / 4);
         ctx.font = `${menuFontSize}px monospace`;
         ctx.textBaseline = 'top';
-        let y = 28 * SCALE;
+        const startY = isMobile ? 26 * SCALE : 28 * SCALE;
+        let y = startY;
         const lineH = 8 * SCALE;
         const leftMargin = 12 * SCALE;
 
         for (let i = 0; i < menuItems.length; i++) {
+            // Mobile: highlight selected row
+            if (i === this.selected && isMobile) {
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.1)`;
+                ctx.fillRect(4 * SCALE, y - 1, SCREEN_WIDTH - 8 * SCALE, lineH);
+            }
+
             if (i === this.selected) {
-                // Selection arrow - vertically centered on font height
+                // Selection arrow
                 ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
                 const ax = leftMargin - 5 * SCALE;
                 const ay = y + Math.floor(menuFontSize / 2);
+                const arrowSize = isMobile ? Math.floor(2.5 * SCALE) : Math.floor(1.5 * SCALE);
                 ctx.beginPath();
-                ctx.moveTo(ax, ay - Math.floor(1.5 * SCALE));
-                ctx.lineTo(ax + 3 * SCALE, ay);
-                ctx.lineTo(ax, ay + Math.floor(1.5 * SCALE));
+                ctx.moveTo(ax, ay - arrowSize);
+                ctx.lineTo(ax + arrowSize + SCALE, ay);
+                ctx.lineTo(ax, ay + arrowSize);
                 ctx.closePath();
                 ctx.fill();
             }
@@ -490,12 +503,13 @@ class TitleScreen {
             let text = menuItems[i];
             if (i === 0) {
                 const diffName = this._getDifficultyName(this.difficulty);
-                text = `${text}  <${diffName}>`;
+                text = isMobile ? `${text}  < ${diffName} >` : `${text}  <${diffName}>`;
             } else if (i === 1) {
-                text = `${text}  <Level ${this.startLevel}>`;
+                text = isMobile ? `${text}  < Lvl ${this.startLevel} >` : `${text}  <Level ${this.startLevel}>`;
             }
 
             ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.font = `${menuFontSize}px monospace`;
             ctx.fillText(text, leftMargin, y);
             y += lineH;
         }
@@ -861,6 +875,38 @@ class FeedbackScreen {
         } else {
             this.gameInfo = "Main Menu";
         }
+
+        // On mobile, focus the hidden textarea to trigger virtual keyboard
+        const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+        if (isMobile) {
+            this._setupMobileFeedbackInput();
+        }
+    }
+
+    _setupMobileFeedbackInput() {
+        const input = document.getElementById('mobileFeedbackInput');
+        if (!input) return;
+        input.value = '';
+        setTimeout(() => {
+            input.focus();
+            input.click();
+        }, 100);
+
+        this._mobileFeedbackHandler = () => {
+            const filtered = input.value.substring(0, this.maxLen);
+            this.message = filtered;
+            input.value = filtered;
+        };
+        input.addEventListener('input', this._mobileFeedbackHandler);
+    }
+
+    _cleanupMobileFeedbackInput() {
+        const input = document.getElementById('mobileFeedbackInput');
+        if (!input) return;
+        if (this._mobileFeedbackHandler) input.removeEventListener('input', this._mobileFeedbackHandler);
+        this._mobileFeedbackHandler = null;
+        input.blur();
+        input.value = '';
     }
 
     handleEvent(event) {
@@ -907,6 +953,7 @@ class FeedbackScreen {
     }
 
     _submit() {
+        this._cleanupMobileFeedbackInput();
         this.phase = "sending";
         const typeStr = this.type === 0 ? "Bug" : "Suggestion";
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScMVpjo84LdvChAqCYzLjzxVVmcKbwY3wRB1MyYQ8rTC3WPYA/formResponse";
@@ -1028,13 +1075,57 @@ class FeedbackScreen {
         ctx.fillStyle = `rgb(${Math.floor(COLOR_FG[0] * 0.5)}, ${Math.floor(COLOR_FG[1] * 0.5)}, ${Math.floor(COLOR_FG[2] * 0.5)})`;
         ctx.fillText(`Location: ${this.gameInfo}`, leftX, boxY + boxH + 4 * SCALE);
 
-        // Bottom prompts
-        ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
-        ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+        // Bottom prompts / buttons
         const isMobileFeedback = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
-        const p1 = isMobileFeedback ? "Tap SUBMIT or CANCEL at bottom" : "ENTER: Submit   ESC: Cancel";
-        const p1w = ctx.measureText(p1).width;
-        ctx.fillText(p1, SCREEN_WIDTH / 2 - p1w / 2, SCREEN_HEIGHT - 6 * SCALE);
+
+        if (isMobileFeedback) {
+            // Draw tappable CANCEL and SUBMIT buttons
+            const btnH = 8 * SCALE;
+            const btnW = 22 * SCALE;
+            const gap = 4 * SCALE;
+            const btnY = SCREEN_HEIGHT - 12 * SCALE;
+            const cancelX = SCREEN_WIDTH / 2 - btnW - gap / 2;
+            const submitX = SCREEN_WIDTH / 2 + gap / 2;
+
+            // CANCEL button
+            ctx.strokeStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cancelX, btnY, btnW, btnH);
+            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+            const cancelText = "CANCEL";
+            const cw = ctx.measureText(cancelText).width;
+            ctx.fillText(cancelText, cancelX + btnW / 2 - cw / 2, btnY + Math.floor(5.5 * SCALE));
+
+            // SUBMIT button
+            const hasText = this.message.trim().length > 0;
+            if (hasText) {
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.15)`;
+                ctx.fillRect(submitX, btnY, btnW, btnH);
+            }
+            ctx.strokeStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.strokeRect(submitX, btnY, btnW, btnH);
+            ctx.fillStyle = hasText
+                ? `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`
+                : `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.35)`;
+            ctx.font = `bold ${Math.floor(12 * SCALE / 4)}px monospace`;
+            const submitText = "SUBMIT";
+            const sw2 = ctx.measureText(submitText).width;
+            ctx.fillText(submitText, submitX + btnW / 2 - sw2 / 2, btnY + Math.floor(5.5 * SCALE));
+
+            // Type toggle hint
+            ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
+            ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.5)`;
+            const typeHint = "Tap type above to switch  |  Tap box to type";
+            const thw = ctx.measureText(typeHint).width;
+            ctx.fillText(typeHint, SCREEN_WIDTH / 2 - thw / 2, SCREEN_HEIGHT - 3 * SCALE);
+        } else {
+            ctx.fillStyle = `rgb(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]})`;
+            ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+            const p1 = "ENTER: Submit   ESC: Cancel";
+            const p1w = ctx.measureText(p1).width;
+            ctx.fillText(p1, SCREEN_WIDTH / 2 - p1w / 2, SCREEN_HEIGHT - 6 * SCALE);
+        }
     }
 }
 
@@ -1233,14 +1324,18 @@ class HighScoreScreen {
 
         ctx.fillStyle = fg;
 
+        const isMobileHS = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+
         // Title
-        ctx.font = `bold ${Math.floor(20 * SCALE / 4)}px monospace`;
+        const hsTitleSize = isMobileHS ? Math.floor(24 * SCALE / 4) : Math.floor(20 * SCALE / 4);
+        ctx.font = `bold ${hsTitleSize}px monospace`;
         const title = "HIGH SCORES";
         const titleW = ctx.measureText(title).width;
         ctx.fillText(title, SCREEN_WIDTH / 2 - titleW / 2, 8 * SCALE);
 
         // Difficulty tabs
-        ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+        const tabFontSize = isMobileHS ? Math.floor(13 * SCALE / 4) : Math.floor(10 * SCALE / 4);
+        ctx.font = `${tabFontSize}px monospace`;
         const tabY = 15 * SCALE;
         const tabNames = this._diffTabs.map(d => this._diffNames[d]);
         const totalTabW = tabNames.reduce((sum, n) => sum + ctx.measureText(n).width, 0) + (tabNames.length - 1) * 6 * SCALE;
@@ -1249,16 +1344,16 @@ class HighScoreScreen {
         for (let i = 0; i < this._diffTabs.length; i++) {
             const isActive = (this._diffTabs[i] === this.viewingTab);
             if (isActive) {
-                ctx.font = `bold ${Math.floor(10 * SCALE / 4)}px monospace`;
+                ctx.font = `bold ${tabFontSize}px monospace`;
             } else {
-                ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
+                ctx.font = `${tabFontSize}px monospace`;
             }
             ctx.fillStyle = fg;
             ctx.fillText(tabNames[i], tabX, tabY);
             if (isActive) {
                 // Underline active tab
                 const tw = ctx.measureText(tabNames[i]).width;
-                ctx.fillRect(tabX, tabY + Math.floor(3 * SCALE), tw, 1);
+                ctx.fillRect(tabX, tabY + Math.floor(3 * SCALE), tw, 2);
             }
             tabX += ctx.measureText(tabNames[i]).width + 6 * SCALE;
         }
@@ -1268,10 +1363,11 @@ class HighScoreScreen {
         const scores = this._scoresByDiff[diffKey] || [];
         const loading = this._loadingByDiff[diffKey];
 
-        ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
+        const scoreFontSize = isMobileHS ? Math.floor(14 * SCALE / 4) : Math.floor(12 * SCALE / 4);
+        ctx.font = `${scoreFontSize}px monospace`;
         ctx.fillStyle = fg;
         let y = 22 * SCALE;
-        const lineH = 5 * SCALE;
+        const lineH = isMobileHS ? Math.floor(6 * SCALE) : 5 * SCALE;
 
         if (loading && scores.length === 0) {
             const loadText = "Loading scores...";

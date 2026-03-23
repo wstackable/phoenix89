@@ -75,6 +75,11 @@ class SoundManager {
         if (!this.enabled) return;
         if (!this.initialized) this.ensureAudioContext();
 
+        // Resume AudioContext if iOS Safari suspended it
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+        }
+
         const sound = this.sfx[name];
         if (!sound) return;
 
@@ -418,6 +423,10 @@ class SoundManager {
      * Cycle to next music track (R for radio)
      */
     nextTrack() {
+        // Resume AudioContext if iOS Safari suspended it
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+        }
         this.play("radio");
         if (this.gameplayTracks.length === 0) return;
         this.currentTrack = (this.currentTrack + 1) % this.gameplayTracks.length;
