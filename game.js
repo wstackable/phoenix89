@@ -1630,14 +1630,19 @@ class Game {
 
             // Mobile beta notice
             if (isMobile) {
-                ctx.font = `${Math.floor(9 * SCALE / 4)}px monospace`;
-                const line1 = "This game was designed for keyboard.";
-                const line2 = "Mobile touch controls are in beta!";
-                const l1w = ctx.measureText(line1).width;
-                const l2w = ctx.measureText(line2).width;
-                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.6)`;
-                ctx.fillText(line1, (SCREEN_WIDTH - l1w) / 2, SCREEN_HEIGHT * 0.62);
-                ctx.fillText(line2, (SCREEN_WIDTH - l2w) / 2, SCREEN_HEIGHT * 0.67);
+                ctx.font = `${Math.floor(11 * SCALE / 4)}px monospace`;
+                ctx.fillStyle = `rgba(${COLOR_FG[0]}, ${COLOR_FG[1]}, ${COLOR_FG[2]}, 0.75)`;
+                const lines = [
+                    "Designed for keyboard / laptop.",
+                    "Mobile controls may have bugs & quirks.",
+                    "Play on a computer for the best experience!",
+                ];
+                let ly = SCREEN_HEIGHT * 0.60;
+                for (const line of lines) {
+                    const lw = ctx.measureText(line).width;
+                    ctx.fillText(line, (SCREEN_WIDTH - lw) / 2, ly);
+                    ly += SCREEN_HEIGHT * 0.055;
+                }
             }
         } else {
             // Still loading
