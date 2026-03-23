@@ -684,30 +684,12 @@ class MobileControls {
         const hs = this.game.highScoreScreen;
 
         if (hs.enteringName) {
-            // Name input box area: focus the hidden input to trigger keyboard
-            const entryY = SCREEN_HEIGHT - 22 * SCALE;
-            const boxW = 52 * SCALE;
-            const boxH = 6 * SCALE;
-            const boxX = SCREEN_WIDTH / 2 - boxW / 2;
-            const boxY = entryY + 3 * SCALE;
-            if (y >= boxY - 4 * SCALE && y <= boxY + boxH + 4 * SCALE &&
-                x >= boxX - 4 * SCALE && x <= boxX + boxW + 4 * SCALE) {
-                // Tap on text box — focus the hidden input
-                const input = document.getElementById('mobileNameInput');
-                if (input) {
-                    input.value = hs.nameInput;
-                    input.focus();
-                    input.click();
-                }
-                return;
-            }
-
-            // Submit button area
+            // Submit button area (check FIRST so it's easy to tap)
             const btnW = 30 * SCALE;
-            const btnH = 7 * SCALE;
+            const btnH2 = 7 * SCALE;
             const btnX = SCREEN_WIDTH / 2 - btnW / 2;
             const btnY = SCREEN_HEIGHT - 14 * SCALE;
-            if (y >= btnY && y <= btnY + btnH &&
+            if (y >= btnY && y <= btnY + btnH2 &&
                 x >= btnX && x <= btnX + btnW &&
                 hs.nameInput.trim().length > 0) {
                 // Submit
@@ -717,6 +699,16 @@ class MobileControls {
                 hs.scrollOffset = 0;
                 hs._cleanupMobileInput();
                 return;
+            }
+
+            // Anywhere else on screen during name entry — focus the hidden input
+            // to bring up virtual keyboard. This MUST run synchronously inside
+            // the touchstart handler (not in a setTimeout) for iOS Safari to
+            // actually show the keyboard.
+            const input = document.getElementById('mobileNameInput');
+            if (input) {
+                input.value = hs.nameInput;
+                input.focus();
             }
             return;
         }

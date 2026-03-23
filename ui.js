@@ -887,10 +887,9 @@ class FeedbackScreen {
         const input = document.getElementById('mobileFeedbackInput');
         if (!input) return;
         input.value = '';
-        setTimeout(() => {
-            input.focus();
-            input.click();
-        }, 100);
+        // NOTE: Don't auto-focus here — iOS Safari only shows keyboard
+        // from a direct user gesture. The keyboard appears when the user
+        // taps the text box area (handled in _handleFeedbackTap).
 
         this._mobileFeedbackHandler = () => {
             const filtered = input.value.substring(0, this.maxLen);
@@ -922,11 +921,18 @@ class FeedbackScreen {
 
         if (this.phase === "sending") return null;
 
+        // On mobile, the hidden textarea handles all typing — skip keyboard
+        // event processing to avoid double characters. Only allow Escape.
+        const isMobileFb = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+
         // Compose phase
         if (event.key === 'Escape') {
+            if (isMobileFb) this._cleanupMobileFeedbackInput();
             this.active = false;
             return this.cameFromPause ? "back_to_pause" : "back_to_title";
         }
+
+        if (isMobileFb) return null;  // All other input handled by hidden textarea
 
         if (event.key === 'Tab') {
             this.type = (this.type + 1) % 2;
@@ -1222,11 +1228,10 @@ class HighScoreScreen {
         const input = document.getElementById('mobileNameInput');
         if (!input) return;
         input.value = '';
-        // Small delay to ensure focus works on iOS Safari
-        setTimeout(() => {
-            input.focus();
-            input.click();
-        }, 100);
+        // NOTE: Don't auto-focus here — iOS Safari only shows the virtual
+        // keyboard when focus happens inside a direct user gesture (touch).
+        // The keyboard will appear when the user taps the screen, which
+        // triggers input.focus() synchronously in _handleHighScoreTap.
 
         // Listen for input changes
         this._mobileInputHandler = () => {
@@ -1271,6 +1276,11 @@ class HighScoreScreen {
         if (event.type !== 'keydown') return false;
 
         if (this.enteringName) {
+            // On mobile, the hidden input handles all typing — skip keyboard
+            // event processing to avoid double characters
+            const isMobile = typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE;
+            if (isMobile) return false;
+
             if (event.key === 'Enter' && this.nameInput.trim().length > 0) {
                 const name = this.nameInput.trim();
                 this._submitGlobalScore(name, this.newScore, this.difficulty);
@@ -1402,7 +1412,7 @@ class HighScoreScreen {
             const entryY = SCREEN_HEIGHT - 22 * SCALE;
             ctx.font = `${Math.floor(12 * SCALE / 4)}px monospace`;
             ctx.fillStyle = fg;
-            const label = isMobile ? "Enter your name (tap box to type):" : "Enter your name:";
+            const label = isMobile ? "Enter your name (tap to type):" : "Enter your name:";
             const lw = ctx.measureText(label).width;
             ctx.fillText(label, SCREEN_WIDTH / 2 - lw / 2, entryY);
 
@@ -1439,7 +1449,7 @@ class HighScoreScreen {
 
             ctx.font = `${Math.floor(10 * SCALE / 4)}px monospace`;
             ctx.fillStyle = fg;
-            const prompt = isMobile ? "Tap the box to type, then SUBMIT" : "Type your name, then press ENTER";
+            const prompt = isMobile ? "Tap anywhere to type, then SUBMIT" : "Type your name, then press ENTER";
             const pw = ctx.measureText(prompt).width;
             ctx.fillText(prompt, SCREEN_WIDTH / 2 - pw / 2, SCREEN_HEIGHT - 6 * SCALE);
         } else {
